@@ -54,6 +54,11 @@ const PORTFOLIO_SPECIALTY_LINE = 'Frontend Architecture | Scalable Web Applicati
         {{ hoverTooltip()!.label }}
       </div>
     }
+    @if (state.currentSection() === 'home') {
+      <p class="mobile-hint" [class.night]="state.lightMode() === 'night'">
+        Toca el interruptor de la pared para cambiar entre dia y noche.
+      </p>
+    }
   `,
   styles: [`
     :host {
@@ -154,12 +159,45 @@ const PORTFOLIO_SPECIALTY_LINE = 'Frontend Architecture | Scalable Web Applicati
       border-color: rgba(178, 156, 255, 0.42);
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     }
+    .mobile-hint {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: max(0.7rem, env(safe-area-inset-bottom));
+      z-index: 4;
+      display: none;
+      margin: 0;
+      max-width: min(92vw, 360px);
+      padding: 0.42rem 0.68rem;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 0.69rem;
+      font-weight: 650;
+      text-align: center;
+      line-height: 1.35;
+      letter-spacing: 0.01em;
+      color: #2a2a2a;
+      border: 1px solid rgba(219, 211, 199, 0.95);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: 0 8px 20px rgba(17, 20, 30, 0.16);
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+    }
+    .mobile-hint.night {
+      border-color: rgba(122, 208, 255, 0.44);
+      background: rgba(14, 19, 33, 0.86);
+      color: #e8f4ff;
+      box-shadow: 0 0 14px rgba(64, 224, 255, 0.22), 0 8px 20px rgba(3, 8, 18, 0.5);
+    }
     @media (max-width: 768px) {
       .hint {
         display: none;
       }
       .hover-tooltip {
         display: none;
+      }
+      .mobile-hint {
+        display: flex;
       }
     }
   `]
@@ -2484,7 +2522,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     this.controls.minDistance = 2;
     this.controls.maxDistance = 8;
     this.controls.enablePan = false;
-    this.controls.enableZoom = false;
+    this.controls.enableZoom = true;
     this.controls.target.set(...this.getResponsiveCameraTarget(CAMERA_POSITIONS.home, 'home').target);
     this.applyResponsiveControlLimits();
   }
@@ -2495,7 +2533,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     const height = canvas.clientHeight;
     const profile = this.getViewportProfile();
 
-    this.camera.fov = profile === 'desktop' ? 50 : profile === 'mobile' ? 66 : 78;
+    this.camera.fov = profile === 'desktop' ? 50 : profile === 'mobile' ? 62 : 68;
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, profile === 'desktop' ? 2 : 1.6));
@@ -2517,22 +2555,28 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     const aspect = window.innerWidth / Math.max(window.innerHeight, 1);
     const isTallMobile = aspect < 0.5;
     const isNarrow = profile === 'narrow-mobile';
+
+    if (context === 'door') {
+      if (isNarrow) {
+        return {
+          position: isTallMobile ? [4.45, 1.8, 5.55] : [4.2, 1.78, 5.18],
+          target: isTallMobile ? [0.0, 1.0, -0.34] : [0.01, 0.99, -0.34]
+        };
+      }
+      return {
+        position: [3.9, 1.74, 4.65],
+        target: [0.02, 0.99, -0.34]
+      };
+    }
+
     const preset =
-      context === 'door'
-        ? {
-            horizontalScale: isNarrow ? (isTallMobile ? 2.36 : 2.2) : 2.0,
-            verticalScale: isNarrow ? 1.14 : 1.1,
-            yOffset: isNarrow ? -0.06 : -0.03,
-            targetXOffset: isNarrow ? 0 : 0.01,
-            targetYOffset: isNarrow ? (isTallMobile ? 0.12 : 0.1) : 0.09
-          }
-        : context === 'home'
+      context === 'home'
           ? {
-              horizontalScale: isNarrow ? (isTallMobile ? 1.86 : 1.74) : 1.6,
-              verticalScale: isNarrow ? 1.1 : 1.06,
-              yOffset: isNarrow ? (isTallMobile ? -0.14 : -0.1) : -0.07,
-              targetXOffset: isNarrow ? (isTallMobile ? 0.1 : 0.08) : 0.06,
-              targetYOffset: isNarrow ? (isTallMobile ? 0.08 : 0.06) : 0.05
+              horizontalScale: isNarrow ? (isTallMobile ? 1.5 : 1.4) : 1.34,
+              verticalScale: isNarrow ? 1.07 : 1.04,
+              yOffset: isNarrow ? (isTallMobile ? -0.1 : -0.08) : -0.05,
+              targetXOffset: isNarrow ? (isTallMobile ? 0.04 : 0.03) : 0.02,
+              targetYOffset: isNarrow ? (isTallMobile ? 0.06 : 0.05) : 0.04
             }
           : {
               horizontalScale: isNarrow ? 1.2 : 1.16,
@@ -2567,25 +2611,34 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     const profile = this.getViewportProfile();
 
     if (profile === 'desktop') {
+      this.controls.zoomSpeed = 1;
       this.controls.minPolarAngle = 0.75;
       this.controls.maxPolarAngle = 1.25;
       this.controls.minAzimuthAngle = 0.35;
       this.controls.maxAzimuthAngle = 1.2;
+      this.controls.minDistance = 2;
+      this.controls.maxDistance = 8;
       return;
     }
 
     if (profile === 'mobile') {
+      this.controls.zoomSpeed = 1.3;
       this.controls.minPolarAngle = 0.68;
       this.controls.maxPolarAngle = 1.34;
-      this.controls.minAzimuthAngle = 0.06;
-      this.controls.maxAzimuthAngle = 1.36;
+      this.controls.minAzimuthAngle = -0.34;
+      this.controls.maxAzimuthAngle = 1.58;
+      this.controls.minDistance = 1.15;
+      this.controls.maxDistance = 10.2;
       return;
     }
 
+    this.controls.zoomSpeed = 1.45;
     this.controls.minPolarAngle = 0.66;
     this.controls.maxPolarAngle = 1.36;
-    this.controls.minAzimuthAngle = 0;
-    this.controls.maxAzimuthAngle = 1.38;
+    this.controls.minAzimuthAngle = -0.42;
+    this.controls.maxAzimuthAngle = 1.64;
+    this.controls.minDistance = 1.05;
+    this.controls.maxDistance = 10.8;
   }
 
   private syncCanvasInteractivity(section: Section): void {
@@ -2596,7 +2649,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       this.controls.enabled = false;
       this.renderer.domElement.style.cursor = 'default';
       this.clearHoverFeedback();
-    } else if (!this.isAnimating) {
+    } else {
       this.controls.enabled = true;
       this.renderer.domElement.style.cursor = 'grab';
     }

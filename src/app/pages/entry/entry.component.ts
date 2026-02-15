@@ -174,7 +174,10 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.Fog(0x0c1422, 4.2, 12.5);
     this.camera = new THREE.PerspectiveCamera(48, 1, 0.1, 80);
-    this.camera.position.set(0.22, 1.38, 3.72);
+    const introConfig = this.getIntroCameraConfig();
+    this.camera.fov = introConfig.fov;
+    this.camera.position.set(...introConfig.startPosition);
+    this.introLookAt.set(...introConfig.lookAt);
     this.camera.lookAt(this.introLookAt);
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -684,9 +687,10 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
 
   private updateIdleApproach(now: number): void {
     if (this.isEntering) return;
+    const introConfig = this.getIntroCameraConfig();
     if (this.idleZoomLocked) {
-      this.camera.position.set(0.22, 1.34, 3.1);
-      this.introLookAt.set(0.1, 1.2, -2.5);
+      this.camera.position.set(...introConfig.endPosition);
+      this.introLookAt.set(...introConfig.lookAt);
       this.camera.lookAt(this.introLookAt);
       return;
     }
@@ -696,11 +700,15 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
     const eased = t * (2 - t);
     this.idleProgress = eased;
 
-    const z = THREE.MathUtils.lerp(3.72, 3.1, eased);
-    const y = THREE.MathUtils.lerp(1.38, 1.34, eased);
-    this.camera.position.set(0.22, y, z);
+    const start = introConfig.startPosition;
+    const end = introConfig.endPosition;
+    this.camera.position.set(
+      THREE.MathUtils.lerp(start[0], end[0], eased),
+      THREE.MathUtils.lerp(start[1], end[1], eased),
+      THREE.MathUtils.lerp(start[2], end[2], eased)
+    );
 
-    this.introLookAt.set(0.1, 1.2, -2.5);
+    this.introLookAt.set(...introConfig.lookAt);
     this.camera.lookAt(this.introLookAt);
     this.updateOfficePreviewReveal(0.1 + this.idleProgress * 0.1);
     if (t >= 1) this.idleZoomLocked = true;
@@ -711,9 +719,49 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
     const canvas = this.renderer.domElement;
     const width = canvas.clientWidth;
     const height = canvas.clientHeight || 1;
+    const introConfig = this.getIntroCameraConfig();
+    this.camera.fov = introConfig.fov;
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false);
+  }
+
+  private getEntryViewportProfile(): 'desktop' | 'mobile' | 'narrow-mobile' {
+    const w = window.innerWidth;
+    if (w <= 430) return 'narrow-mobile';
+    if (w <= 768) return 'mobile';
+    return 'desktop';
+  }
+
+  private getIntroCameraConfig(): {
+    startPosition: [number, number, number];
+    endPosition: [number, number, number];
+    lookAt: [number, number, number];
+    fov: number;
+  } {
+    const profile = this.getEntryViewportProfile();
+    if (profile === 'desktop') {
+      return {
+        startPosition: [0.22, 1.38, 3.72],
+        endPosition: [0.22, 1.34, 3.1],
+        lookAt: [0.1, 1.2, -2.5],
+        fov: 48
+      };
+    }
+    if (profile === 'mobile') {
+      return {
+        startPosition: [0.18, 1.43, 4.9],
+        endPosition: [0.16, 1.4, 4.35],
+        lookAt: [0.05, 1.17, -2.52],
+        fov: 58
+      };
+    }
+    return {
+      startPosition: [0.16, 1.46, 5.25],
+      endPosition: [0.14, 1.43, 4.72],
+      lookAt: [0.04, 1.16, -2.54],
+      fov: 64
+    };
   }
 
   private animate = (): void => {
