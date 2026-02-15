@@ -1,0 +1,139 @@
+:root {
+  --color-primary: #1c1c1c;
+  --color-secondary: #5a5a5a;
+  --color-background: #f6f4ef;
+  --color-surface: #ffffff;
+  --color-soft-surface: #ece8df;
+  --color-lines: #dcd7cd;
+  --color-accent: #7c5cff;
+  --color-accent-soft: #eae5ff;
+  --color-card-bg: rgba(255, 255, 255, 0.94);
+  --color-card-border: rgba(220, 215, 205, 0.98);
+  --color-button: rgba(124, 92, 255, 0.94);
+  --color-button-hover: rgba(234, 229, 255, 1);
+  --color-hint: rgba(28, 28, 28, 0.82);
+  --color-hint-night: rgba(255, 255, 255, 0.9);
+  --color-entry-bg: radial-gradient(circle at 50% 18%, #f9f7f2 0%, #f2eee5 48%, #e6e1d6 100%);
+  --color-entry-btn: rgba(255, 255, 255, 0.9);
+  --color-entry-btn-text: #1c1c1c;
+  --color-link: #7c5cff;
+  --color-link-night: #b29cff;
+  --color-panel-night: rgba(17, 15, 28, 0.95);
+  --color-tooltip-bg: rgba(9, 12, 24, 0.95);
+  --projects-panel-bg: #f6f4ef;
+  --projects-panel-border: #dcd7cd;
+  --projects-panel-shadow: 0 6px 20px rgba(28, 28, 28, 0.08);
+  --projects-card-bg: #ffffff;
+  --projects-card-border: #e4dfd5;
+  --projects-logo-bg: #f4f1ea;
+  --projects-logo-border-base: #dcd7cd;
+  --projects-title-color: #1c1c1c;
+  --projects-chip-bg: #ece8df;
+  --projects-chip-text: #5a5a5a;
+  --projects-chip-border-base: #d7d1c6;
+  --projects-modal-bg: rgba(255, 255, 255, 0.98);
+  --projects-modal-border: #ddd8ce;
+  --projects-modal-shadow: 0 16px 40px rgba(28, 28, 28, 0.15);
+  --projects-close-bg: rgba(246, 244, 239, 0.96);
+  --projects-close-border: #dcd7cd;
+  --projects-close-text: #1c1c1c;
+  --neon-pink: #7c5cff;
+  --neon-cyan: #8a6dff;
+  --neon-mint: #9b84ff;
+  --neon-purple: #6f56df;
+  --neon-glow-soft: 0 0 16px rgba(124, 92, 255, 0.22);
+  --neon-glow-strong: 0 0 22px rgba(124, 92, 255, 0.35);
+}
+
+.night {
+  --color-primary: #f2efff;
+  --color-secondary: #cbc3ec;
+  --color-link: #b29cff;
+  --color-card-bg: rgba(18, 15, 31, 0.92);
+  --color-card-border: rgba(151, 128, 255, 0.42);
+  --color-hint: rgba(236, 244, 255, 0.86);
+  --projects-panel-bg:
+    radial-gradient(circle at 14% -6%, rgba(124, 92, 255, 0.2) 0%, rgba(124, 92, 255, 0) 42%),
+    radial-gradient(circle at 90% 12%, rgba(143, 114, 255, 0.16) 0%, rgba(143, 114, 255, 0) 44%),
+    linear-gradient(180deg, rgba(14, 12, 23, 0.97) 0%, rgba(16, 14, 27, 0.97) 100%);
+  --projects-panel-border: rgba(151, 128, 255, 0.35);
+  --projects-panel-shadow:
+    inset 0 1px 0 rgba(178, 156, 255, 0.2),
+    0 0 0 1px rgba(124, 92, 255, 0.2),
+    0 14px 40px rgba(0, 0, 0, 0.42);
+  --projects-card-bg: rgba(11, 16, 30, 0.84);
+  --projects-card-border: rgba(151, 128, 255, 0.34);
+  --projects-logo-bg: rgba(11, 18, 33, 0.95);
+  --projects-logo-border-base: rgba(184, 166, 255, 0.4);
+  --projects-title-color: #f2efff;
+  --projects-chip-bg: rgba(14, 25, 44, 0.92);
+  --projects-chip-text: #ebf2ff;
+  --projects-chip-border-base: rgba(170, 149, 255, 0.42);
+  --projects-modal-bg:
+    radial-gradient(circle at 8% 0%, rgba(124, 92, 255, 0.18) 0%, rgba(124, 92, 255, 0) 36%),
+    radial-gradient(circle at 100% 8%, rgba(178, 156, 255, 0.16) 0%, rgba(178, 156, 255, 0) 38%),
+    rgba(8, 12, 24, 0.97);
+  --projects-modal-border: rgba(151, 128, 255, 0.46);
+  --projects-modal-shadow:
+    0 16px 44px rgba(0, 0, 0, 0.44),
+    0 0 24px rgba(124, 92, 255, 0.2),
+    0 0 22px rgba(178, 156, 255, 0.1);
+  --projects-close-bg: rgba(13, 23, 41, 0.86);
+  --projects-close-border: rgba(170, 149, 255, 0.38);
+  --projects-close-text: #ebf2ff;
+}
+
+.neon-text {
+  font-family: 'Dancing Script', 'Pacifico', 'Great Vibes', cursive, system-ui;
+  color: #fff;
+  text-shadow:
+    0 0 4px #fff,
+    0 0 8px #fff,
+    0 0 12px #7c5cff,
+    0 0 20px #7c5cff,
+    0 0 30px #7c5cff,
+    0 0 40px #6f56df,
+    0 0 55px #6f56df;
+}
+
+.neon-text--pink {
+  color: #fff;
+  text-shadow:
+    0 0 4px #fff,
+    0 0 8px #fff,
+    0 0 12px #7c5cff,
+    0 0 20px #7c5cff,
+    0 0 30px #7c5cff,
+    0 0 40px #6f56df;
+}
+
+.neon-text--cyan {
+  color: #fff;
+  text-shadow:
+    0 0 4px #fff,
+    0 0 8px #fff,
+    0 0 12px #8f72ff,
+    0 0 20px #8f72ff,
+    0 0 30px #8f72ff,
+    0 0 40px #7c5cff;
+}
+
+.neon-text--green {
+  color: #fff;
+  text-shadow:
+    0 0 4px #fff,
+    0 0 8px #fff,
+    0 0 12px #9f86ff,
+    0 0 20px #9f86ff,
+    0 0 30px #9f86ff;
+}
+
+.neon-text--yellow {
+  color: #fff;
+  text-shadow:
+    0 0 4px #fff,
+    0 0 8px #fff,
+    0 0 12px #b29cff,
+    0 0 20px #b29cff,
+    0 0 30px #b29cff;
+}
