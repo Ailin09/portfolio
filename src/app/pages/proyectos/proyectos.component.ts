@@ -1,4 +1,4 @@
-import { Component, HostListener, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, computed, effect, inject, signal } from '@angular/core';
 import { PortfolioStateService } from '../../core/portfolio-state.service';
 import { PROJECTS } from '../../core/projects-data';
 
@@ -652,6 +652,15 @@ export class ProyectosComponent {
   protected readonly state = inject(PortfolioStateService);
   protected readonly projects = PROJECTS;
   private readonly hiddenLogos = signal<Record<string, true>>({});
+  private suppressSelectionUntil = 0;
+
+  constructor() {
+    effect(() => {
+      if (this.state.currentSection() === 'proyectos') {
+        this.suppressSelectionUntil = performance.now() + 420;
+      }
+    });
+  }
 
   protected readonly selectedProject = computed(() => {
     const id = this.state.selectedProject();
@@ -660,6 +669,7 @@ export class ProyectosComponent {
   });
 
   protected selectProject(projectId: string): void {
+    if (performance.now() < this.suppressSelectionUntil) return;
     this.state.selectProject(projectId);
   }
 

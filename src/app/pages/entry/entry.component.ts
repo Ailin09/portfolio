@@ -1,6 +1,7 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, effect, signal } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, effect, inject, signal } from '@angular/core';
 import * as THREE from 'three';
 import { PortfolioStateService } from '../../core/portfolio-state.service';
+import { SceneTransitionService } from '../../core/scene-transition.service';
 
 @Component({
   selector: 'app-entry',
@@ -25,7 +26,7 @@ import { PortfolioStateService } from '../../core/portfolio-state.service';
     .entry-screen {
       position: fixed;
       inset: 0;
-      background: radial-gradient(circle at 50% 18%, #f9f7f2 0%, #f2eee5 48%, #e6e1d6 100%);
+      background: radial-gradient(circle at 50% 18%, #f1f5ea 0%, #e8efde 48%, #dbe7ce 100%);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -35,7 +36,7 @@ import { PortfolioStateService } from '../../core/portfolio-state.service';
     }
 
     .entry-screen.night {
-      background: radial-gradient(circle at 50% 18%, #1a1627 0%, #120f1c 48%, #0b0912 100%);
+      background: radial-gradient(circle at 50% 18%, #0f1f1a 0%, #0b1713 48%, #070f0c 100%);
     }
 
     .entry-canvas {
@@ -96,6 +97,7 @@ import { PortfolioStateService } from '../../core/portfolio-state.service';
 })
 export class EntryComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvas') private canvasRef!: ElementRef<HTMLCanvasElement>;
+  private readonly transition = inject(SceneTransitionService);
 
   protected isEntering = false;
 
@@ -116,6 +118,7 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
   private transitionStartedAt = 0;
   private introStartedAt = 0;
   private hasTriggeredEnter = false;
+  private entryTransitionToken: symbol | null = null;
   private switchPressedUntil = 0;
   private baseExposure = 1.06;
   private entryRevealProgress = 0;
@@ -174,7 +177,10 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.Fog(0x0c1422, 4.2, 12.5);
     this.camera = new THREE.PerspectiveCamera(48, 1, 0.1, 80);
-    this.camera.position.set(0.22, 1.38, 3.72);
+    const introConfig = this.getIntroCameraConfig();
+    this.camera.fov = introConfig.fov;
+    this.camera.position.set(...introConfig.startPosition);
+    this.introLookAt.set(...introConfig.lookAt);
     this.camera.lookAt(this.introLookAt);
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -205,12 +211,21 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
     cancelAnimationFrame(this.animationId);
     this.floorTexture?.dispose();
     this.renderer?.dispose();
+    if (this.entryTransitionToken) {
+      void this.transition.end(this.entryTransitionToken);
+      this.entryTransitionToken = null;
+    }
   }
 
   protected startEntry(): void {
     if (this.isEntering) return;
     this.hoverTooltip.set(null);
     this.isEntering = true;
+    this.entryTransitionToken = this.transition.begin({
+      kind: 'entry',
+      label: 'Abriendo la oficina...',
+      minVisibleMs: 900
+    });
     this.entryRevealProgress = 0;
     this.transitionStartedAt = performance.now();
     this.entryStartPos.copy(this.camera.position);
@@ -218,7 +233,7 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
   }
 
   private buildCorridor(): void {
-    this.scene.background = new THREE.Color(0xf6f4ef);
+    this.scene.background = new THREE.Color(0xeef2e8);
 
     this.ambientLight = new THREE.AmbientLight(0xf3eee2, 0.5);
     this.scene.add(this.ambientLight);
@@ -594,7 +609,18 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
     this.setRayFromEvent(event);
     const switchHit = this.raycaster.intersectObject(this.switchHitbox, true);
     if (switchHit.length > 0) {
-      this.state.toggleLightMode();
+      void this.transition.run(
+        {
+          kind: 'theme',
+          label: 'Cambiando iluminacion...',
+          minVisibleMs: 440,
+          startTaskDelayMs: 180
+        },
+        async () => {
+          this.state.toggleLightMode();
+          await this.wait(160);
+        }
+      );
       this.switchPressedUntil = performance.now() + 160;
       return;
     }
@@ -678,15 +704,25 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
 
     if (t >= 0.88 && !this.hasTriggeredEnter) {
       this.hasTriggeredEnter = true;
-      this.state.enter();
+      void this.completeEnterSequence();
+    }
+  }
+
+  private async completeEnterSequence(): Promise<void> {
+    this.state.enter();
+    await this.wait(220);
+    if (this.entryTransitionToken) {
+      await this.transition.end(this.entryTransitionToken);
+      this.entryTransitionToken = null;
     }
   }
 
   private updateIdleApproach(now: number): void {
     if (this.isEntering) return;
+    const introConfig = this.getIntroCameraConfig();
     if (this.idleZoomLocked) {
-      this.camera.position.set(0.22, 1.34, 3.1);
-      this.introLookAt.set(0.1, 1.2, -2.5);
+      this.camera.position.set(...introConfig.endPosition);
+      this.introLookAt.set(...introConfig.lookAt);
       this.camera.lookAt(this.introLookAt);
       return;
     }
@@ -696,11 +732,15 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
     const eased = t * (2 - t);
     this.idleProgress = eased;
 
-    const z = THREE.MathUtils.lerp(3.72, 3.1, eased);
-    const y = THREE.MathUtils.lerp(1.38, 1.34, eased);
-    this.camera.position.set(0.22, y, z);
+    const start = introConfig.startPosition;
+    const end = introConfig.endPosition;
+    this.camera.position.set(
+      THREE.MathUtils.lerp(start[0], end[0], eased),
+      THREE.MathUtils.lerp(start[1], end[1], eased),
+      THREE.MathUtils.lerp(start[2], end[2], eased)
+    );
 
-    this.introLookAt.set(0.1, 1.2, -2.5);
+    this.introLookAt.set(...introConfig.lookAt);
     this.camera.lookAt(this.introLookAt);
     this.updateOfficePreviewReveal(0.1 + this.idleProgress * 0.1);
     if (t >= 1) this.idleZoomLocked = true;
@@ -711,9 +751,49 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
     const canvas = this.renderer.domElement;
     const width = canvas.clientWidth;
     const height = canvas.clientHeight || 1;
+    const introConfig = this.getIntroCameraConfig();
+    this.camera.fov = introConfig.fov;
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false);
+  }
+
+  private getEntryViewportProfile(): 'desktop' | 'mobile' | 'narrow-mobile' {
+    const w = window.innerWidth;
+    if (w <= 430) return 'narrow-mobile';
+    if (w <= 768) return 'mobile';
+    return 'desktop';
+  }
+
+  private getIntroCameraConfig(): {
+    startPosition: [number, number, number];
+    endPosition: [number, number, number];
+    lookAt: [number, number, number];
+    fov: number;
+  } {
+    const profile = this.getEntryViewportProfile();
+    if (profile === 'desktop') {
+      return {
+        startPosition: [0.22, 1.38, 3.72],
+        endPosition: [0.22, 1.34, 3.1],
+        lookAt: [0.1, 1.2, -2.5],
+        fov: 48
+      };
+    }
+    if (profile === 'mobile') {
+      return {
+        startPosition: [0.2, 1.44, 5.05],
+        endPosition: [0.19, 1.41, 4.55],
+        lookAt: [0.04, 1.19, -2.5],
+        fov: 60
+      };
+    }
+    return {
+      startPosition: [0.18, 1.47, 5.45],
+      endPosition: [0.17, 1.44, 4.95],
+      lookAt: [0.03, 1.18, -2.52],
+      fov: 66
+    };
   }
 
   private animate = (): void => {
@@ -729,8 +809,8 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
     if (!this.scene) return;
 
     if (mode === 'day') {
-      this.scene.background = new THREE.Color(0xf6f4ef);
-      this.scene.fog = new THREE.Fog(0xf2eee5, 9.5, 22.5);
+      this.scene.background = new THREE.Color(0xeef2e8);
+      this.scene.fog = new THREE.Fog(0xe5ebdc, 9.5, 22.5);
       this.baseExposure = 1.12;
 
       this.ambientLight.color.setHex(0xf6efe3);
@@ -740,21 +820,21 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
       this.spotLight.color.setHex(0xffe9c9);
       this.spotLight.intensity = 1.32;
 
-      this.floorMaterial?.color.setHex(0xf4eadb);
-      this.wallMaterial?.color.setHex(0xf7f9fc);
-      this.frontWallMaterial?.color.setHex(0xf0f4f9);
-      this.ceilingMaterial?.color.setHex(0xffffff);
-      this.backWallMaterial?.color.setHex(0xe9f0f8);
+      this.floorMaterial?.color.setHex(0xcbb79b);
+      this.wallMaterial?.color.setHex(0xe1eadb);
+      this.frontWallMaterial?.color.setHex(0xd7e2cf);
+      this.ceilingMaterial?.color.setHex(0xf1f6ec);
+      this.backWallMaterial?.color.setHex(0xd3decb);
       this.frameMaterial?.color.setHex(0x6a4630);
       this.doorMaterial?.color.setHex(0x835238);
       this.knobMaterial?.color.setHex(0xe1c58e);
       this.doorMoldingMaterial?.color.setHex(0x936247);
       this.switchPlateMaterial?.color.setHex(0xf0f4fb);
       this.switchButtonMaterial?.color.setHex(0xa6b3c9);
-      this.previewWallMaterial?.color.setHex(0xe5dfd4);
+      this.previewWallMaterial?.color.setHex(0xd7e0cc);
       this.previewFloorMaterial?.color.setHex(0xf2eee4);
-      this.previewDeskMaterial?.color.setHex(0xcbc3b4);
-      this.previewChairMaterial?.color.setHex(0x9f9583);
+      this.previewDeskMaterial?.color.setHex(0xc7bcab);
+      this.previewChairMaterial?.color.setHex(0x8fa084);
       this.previewPlantMaterial?.color.setHex(0x778975);
       this.previewScreenMaterial?.color.setHex(0xf7f5f0);
       this.previewScreenMaterial?.emissive.setHex(0xeae5ff);
@@ -784,47 +864,47 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
         light.intensity = 0;
       });
     } else {
-      this.scene.background = new THREE.Color(0x11101a);
-      this.scene.fog = new THREE.Fog(0x080e19, 4.3, 12.2);
+      this.scene.background = new THREE.Color(0x08140f);
+      this.scene.fog = new THREE.Fog(0x07110d, 4.3, 12.2);
       this.baseExposure = 1.05;
 
-      this.ambientLight.color.setHex(0x3a324d);
+      this.ambientLight.color.setHex(0x17352a);
       this.ambientLight.intensity = 0.42;
-      this.fillLight.color.setHex(0x4e3e84);
-      this.fillLight.intensity = 0.28;
-      this.spotLight.color.setHex(0xfff0ca);
-      this.spotLight.intensity = 0.28;
+      this.fillLight.color.setHex(0x124030);
+      this.fillLight.intensity = 0.3;
+      this.spotLight.color.setHex(0x8ffff4);
+      this.spotLight.intensity = 0.3;
 
       this.floorMaterial?.color.setHex(0x7b6a57);
-      this.wallMaterial?.color.setHex(0x1a2740);
-      this.frontWallMaterial?.color.setHex(0x1f2d47);
-      this.ceilingMaterial?.color.setHex(0x152238);
-      this.backWallMaterial?.color.setHex(0x1f2e49);
+      this.wallMaterial?.color.setHex(0x284536);
+      this.frontWallMaterial?.color.setHex(0x244234);
+      this.ceilingMaterial?.color.setHex(0x1a3429);
+      this.backWallMaterial?.color.setHex(0x213d31);
       this.frameMaterial?.color.setHex(0x2e1c12);
       this.doorMaterial?.color.setHex(0x86553c);
       this.knobMaterial?.color.setHex(0xcaa86e);
       this.doorMoldingMaterial?.color.setHex(0xa26a4b);
       this.switchPlateMaterial?.color.setHex(0x62708a);
       this.switchButtonMaterial?.color.setHex(0x8ea3c4);
-      this.previewWallMaterial?.color.setHex(0x242033);
+      this.previewWallMaterial?.color.setHex(0x1f3a2f);
       this.previewFloorMaterial?.color.setHex(0x12101c);
-      this.previewDeskMaterial?.color.setHex(0x2f2a42);
-      this.previewChairMaterial?.color.setHex(0x27203a);
-      this.previewPlantMaterial?.color.setHex(0x3f6f5d);
-      this.previewScreenMaterial?.color.setHex(0xcce8ff);
-      this.previewScreenMaterial?.emissive.setHex(0x7c5cff);
+      this.previewDeskMaterial?.color.setHex(0x243c32);
+      this.previewChairMaterial?.color.setHex(0x23372f);
+      this.previewPlantMaterial?.color.setHex(0x52a178);
+      this.previewScreenMaterial?.color.setHex(0xd2fff7);
+      this.previewScreenMaterial?.emissive.setHex(0x4fffe0);
       if (this.previewScreenMaterial) this.previewScreenMaterial.emissiveIntensity = 1.1;
       this.previewCpuMaterial?.color.setHex(0x111a2a);
-      this.previewPhoneMaterial?.color.setHex(0xdf6db0);
-      this.previewPhoneMaterial?.emissive.setHex(0x8f72ff);
+      this.previewPhoneMaterial?.color.setHex(0x53d9b0);
+      this.previewPhoneMaterial?.emissive.setHex(0x4fffe0);
       if (this.previewPhoneMaterial) this.previewPhoneMaterial.emissiveIntensity = 0.44;
       this.previewAccentMaterial?.color.setHex(0xd8eeff);
-      this.previewAccentMaterial?.emissive.setHex(0x8f72ff);
+      this.previewAccentMaterial?.emissive.setHex(0x4fffe0);
       if (this.previewAccentMaterial) this.previewAccentMaterial.emissiveIntensity = 1.2;
-      this.previewTrimMaterial?.color.setHex(0x4a3d71);
-      this.previewGlowLight.color.setHex(0x7c5cff);
+      this.previewTrimMaterial?.color.setHex(0x2f5b4f);
+      this.previewGlowLight.color.setHex(0x4fffe0);
       this.previewGlowLight.userData['baseIntensity'] = 0.8;
-      this.doorAccentLight.color.setHex(0xffb877);
+      this.doorAccentLight.color.setHex(0x58ffd5);
       this.doorAccentLight.intensity = 0.5;
       this.rgbLights.forEach((light) => {
         light.visible = true;
@@ -965,6 +1045,12 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
       const phase = (light.userData['phase'] as number) ?? idx * 0.7;
       const pulse = 0.95 + (Math.sin(this.rgbPulseTime * 1.25 + phase) + 1) * 0.3;
       light.intensity = base * pulse;
+    });
+  }
+
+  private wait(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, Math.max(0, ms));
     });
   }
 }

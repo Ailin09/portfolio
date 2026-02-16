@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, inject } from '@angular/core';
 import { PortfolioStateService } from '../../core/portfolio-state.service';
 
 @Component({
@@ -15,8 +15,8 @@ import { PortfolioStateService } from '../../core/portfolio-state.service';
           <h2 class="board-title">Sobre mí</h2>
         </header>
 
-        <div class="board-surface">
-          <article class="sticky sticky--intro">
+        <div #boardSurface class="board-surface">
+          <article class="sticky sticky--intro" (pointerdown)="onStickyPointerDown($event)">
             <span class="pin" aria-hidden="true"></span>
             <h3>Frontend Angular</h3>
             <p>
@@ -25,7 +25,7 @@ import { PortfolioStateService } from '../../core/portfolio-state.service';
             </p>
           </article>
 
-          <article class="sticky sticky--impact">
+          <article class="sticky sticky--impact" (pointerdown)="onStickyPointerDown($event)">
             <span class="pin" aria-hidden="true"></span>
             <h3>Lo que me mueve</h3>
             <p>
@@ -33,7 +33,7 @@ import { PortfolioStateService } from '../../core/portfolio-state.service';
             </p>
           </article>
 
-          <article class="sticky sticky--method">
+          <article class="sticky sticky--method" (pointerdown)="onStickyPointerDown($event)">
             <span class="pin" aria-hidden="true"></span>
             <h3>MI FORMA DE TRABAJAR</h3>
             <p>
@@ -42,7 +42,7 @@ import { PortfolioStateService } from '../../core/portfolio-state.service';
             </p>
           </article>
 
-          <article class="sticky sticky--photo">
+          <article class="sticky sticky--photo" (pointerdown)="onStickyPointerDown($event)">
             <span class="pin" aria-hidden="true"></span>
             @if (profileImageUrl) {
               <img [src]="profileImageUrl" alt="Foto de Ailín" class="profile-photo" />
@@ -53,7 +53,7 @@ import { PortfolioStateService } from '../../core/portfolio-state.service';
             }
           </article>
 
-          <article class="sticky sticky--signature">
+          <article class="sticky sticky--signature" (pointerdown)="onStickyPointerDown($event)">
             <span class="pin" aria-hidden="true"></span>
             <p class="signature-text">AQUÍ SE SUEÑA</p>
           </article>
@@ -181,10 +181,19 @@ import { PortfolioStateService } from '../../core/portfolio-state.service';
       transform-origin: top center;
       transition: transform 150ms ease;
       isolation: isolate;
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
     }
 
-    .sticky:hover {
+    .sticky:not(.sticky--dragging):hover {
       transform: translateY(-4px) scale(1.03) rotate(var(--r, 0deg));
+    }
+
+    .sticky--dragging {
+      cursor: grabbing;
+      z-index: 6;
+      transition: none;
     }
 
     .sticky::after {
@@ -579,7 +588,102 @@ import { PortfolioStateService } from '../../core/portfolio-state.service';
     }
   `]
 })
-export class SobreMiComponent {
+export class SobreMiComponent implements AfterViewInit, OnDestroy {
+  @ViewChild('boardSurface') private boardSurfaceRef!: ElementRef<HTMLElement>;
   protected readonly state = inject(PortfolioStateService);
   profileImageUrl = '/images/ailin.png';
+
+  private activeDrag: {
+    pointerId: number;
+    element: HTMLElement;
+    offsetX: number;
+    offsetY: number;
+  } | null = null;
+
+  private readonly windowPointerMoveHandler = (event: PointerEvent) => this.onWindowPointerMove(event);
+  private readonly windowPointerUpHandler = (event: PointerEvent) => this.onWindowPointerUp(event);
+  private readonly windowPointerCancelHandler = (event: PointerEvent) => this.onWindowPointerUp(event);
+
+  ngAfterViewInit(): void {
+    window.addEventListener('pointermove', this.windowPointerMoveHandler);
+    window.addEventListener('pointerup', this.windowPointerUpHandler);
+    window.addEventListener('pointercancel', this.windowPointerCancelHandler);
+  }
+
+  ngOnDestroy(): void {
+    window.removeEventListener('pointermove', this.windowPointerMoveHandler);
+    window.removeEventListener('pointerup', this.windowPointerUpHandler);
+    window.removeEventListener('pointercancel', this.windowPointerCancelHandler);
+  }
+
+  protected onStickyPointerDown(event: PointerEvent): void {
+    const board = this.boardSurfaceRef?.nativeElement;
+    if (!board) return;
+
+    const element = event.currentTarget as HTMLElement | null;
+    if (!element) return;
+
+    this.ensureStickyAbsolutePosition(element, board);
+
+    const stickyRect = element.getBoundingClientRect();
+    this.activeDrag = {
+      pointerId: event.pointerId,
+      element,
+      offsetX: event.clientX - stickyRect.left,
+      offsetY: event.clientY - stickyRect.top
+    };
+
+    element.classList.add('sticky--dragging');
+    element.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  private onWindowPointerMove(event: PointerEvent): void {
+    if (!this.activeDrag) return;
+    if (event.pointerId !== this.activeDrag.pointerId) return;
+
+    const board = this.boardSurfaceRef?.nativeElement;
+    if (!board) return;
+
+    const boardRect = board.getBoundingClientRect();
+    const stickyRect = this.activeDrag.element.getBoundingClientRect();
+    const maxLeft = Math.max(0, boardRect.width - stickyRect.width);
+    const maxTop = Math.max(0, boardRect.height - stickyRect.height);
+    const rawLeft = event.clientX - boardRect.left - this.activeDrag.offsetX;
+    const rawTop = event.clientY - boardRect.top - this.activeDrag.offsetY;
+    const nextLeft = Math.min(Math.max(rawLeft, 0), maxLeft);
+    const nextTop = Math.min(Math.max(rawTop, 0), maxTop);
+
+    this.activeDrag.element.style.left = `${nextLeft}px`;
+    this.activeDrag.element.style.top = `${nextTop}px`;
+    event.preventDefault();
+  }
+
+  private onWindowPointerUp(event: PointerEvent): void {
+    if (!this.activeDrag) return;
+    if (event.pointerId !== this.activeDrag.pointerId) return;
+
+    const { element, pointerId } = this.activeDrag;
+    element.classList.remove('sticky--dragging');
+    if (element.hasPointerCapture(pointerId)) {
+      element.releasePointerCapture(pointerId);
+    }
+    this.activeDrag = null;
+  }
+
+  private ensureStickyAbsolutePosition(element: HTMLElement, board: HTMLElement): void {
+    if (element.dataset['isDraggableReady'] === 'true') return;
+
+    const boardRect = board.getBoundingClientRect();
+    const stickyRect = element.getBoundingClientRect();
+    const left = stickyRect.left - boardRect.left;
+    const top = stickyRect.top - boardRect.top;
+
+    element.style.left = `${left}px`;
+    element.style.top = `${top}px`;
+    element.style.right = 'auto';
+    element.style.bottom = 'auto';
+    element.style.transform = 'rotate(var(--r, 0deg))';
+    element.dataset['isDraggableReady'] = 'true';
+  }
 }

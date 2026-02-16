@@ -14,9 +14,9 @@ import { PortfolioStateService } from '../../core/portfolio-state.service';
         <button
           class="exit-btn"
           (click)="exitToInitialView()"
-          aria-label="Salir"
+          aria-label="Volver"
         >
-          ← Salir
+          ← Volver
         </button>
       }
       @if (state.currentSection() === 'sobre-mi') {
