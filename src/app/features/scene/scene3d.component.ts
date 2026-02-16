@@ -13,6 +13,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Raycaster, Vector2 } from 'three';
 import { PortfolioStateService } from '../../core/portfolio-state.service';
+import { SceneTransitionService } from '../../core/scene-transition.service';
 import { theme } from '../../core/theme';
 import { CAMERA_POSITIONS, DOOR_CAMERA, NEON_SIGN_CAMERA, NEON_SIGN_WAYPOINT } from '../../core/camera-positions';
 import type { Section } from '../../core/portfolio-state.service';
@@ -41,9 +42,6 @@ const PORTFOLIO_SPECIALTY_LINE = 'Frontend Architecture | Scalable Web Applicati
         <p class="portfolio-specialty">{{ portfolioSpecialtyLine }}</p>
       </div>
     }
-    <p class="hint" [class.night]="state.lightMode() === 'night'" [class.hidden]="!showHelpHint()">
-      {{ state.hasEnteredHouse() ? 'Haz clic en un objeto para navegar: Pizarra (Sobre mí), PC (Proyectos), Tocadiscos (Hobbies), Cuadros (Certificaciones), Teléfono (Contacto) e Interruptor (día/noche).' : 'Arrastra para explorar y haz clic en un objeto: Pizarra -> Sobre mí · PC -> Proyectos · Tocadiscos -> Hobbies · Cuadros -> Certificaciones · Teléfono -> Contacto · Interruptor -> día/noche' }}
-    </p>
     @if (hoverTooltip()) {
       <div
         class="hover-tooltip"
@@ -53,6 +51,53 @@ const PORTFOLIO_SPECIALTY_LINE = 'Frontend Architecture | Scalable Web Applicati
       >
         {{ hoverTooltip()!.label }}
       </div>
+    }
+    @if (state.currentSection() === 'home') {
+      <button
+        type="button"
+        class="mobile-help-toggle"
+        [class.night]="state.lightMode() === 'night'"
+        (click)="toggleMobileHelpPanel()"
+        aria-label="Mostrar ayuda de interaccion"
+      >
+        ?
+      </button>
+
+      @if (isMobileUi() && showMobileGuideBanner()) {
+        <p class="mobile-guide-banner" [class.night]="state.lightMode() === 'night'">
+          Arrastra para girar, pellizca para zoom y toca objetos para navegar.
+        </p>
+      }
+
+      @if (showMobileHelpPanel()) {
+        <aside class="mobile-help-panel" [class.night]="state.lightMode() === 'night'">
+          <p class="mobile-help-title">Como interactuar</p>
+          <p class="mobile-help-line">PC -> Proyectos</p>
+          <p class="mobile-help-line">Pizarra -> Sobre mi</p>
+          <p class="mobile-help-line">Tocadiscos -> Hobbies</p>
+          <p class="mobile-help-line">Cuadros -> Certificaciones</p>
+          <p class="mobile-help-line">Telefono -> Contacto</p>
+          <p class="mobile-help-line">Interruptor -> Dia/Noche</p>
+        </aside>
+      }
+
+      @if (isMobileUi()) {
+        <div class="mobile-markers-layer">
+          @for (marker of mobileGuideMarkers(); track marker.id) {
+            @if (marker.visible) {
+              <div
+                class="mobile-marker"
+                [style.left.px]="marker.x"
+                [style.top.px]="marker.y"
+                [style.--delay]="marker.delay"
+              >
+                <span class="mobile-marker-dot"></span>
+                <span class="mobile-marker-label">{{ marker.label }}</span>
+              </div>
+            }
+          }
+        </div>
+      }
     }
   `,
   styles: [`
@@ -108,27 +153,6 @@ const PORTFOLIO_SPECIALTY_LINE = 'Frontend Architecture | Scalable Web Applicati
       letter-spacing: 0.02em;
       opacity: 0.84;
     }
-    .hint {
-      position: absolute;
-      bottom: 1rem;
-      left: 50%;
-      transform: translateX(-50%);
-      font-family: 'Inter', system-ui, sans-serif;
-      font-size: 0.7rem;
-      max-width: 90%;
-      text-align: center;
-      color: var(--color-hint);
-      pointer-events: none;
-      z-index: 1;
-      line-height: 1.4;
-      transition: opacity 0.35s ease;
-    }
-    .hint.hidden {
-      opacity: 0;
-    }
-    .hint.night {
-      color: var(--color-hint-night);
-    }
     .hover-tooltip {
       position: absolute;
       transform: translate(-50%, -130%);
@@ -154,12 +178,158 @@ const PORTFOLIO_SPECIALTY_LINE = 'Frontend Architecture | Scalable Web Applicati
       border-color: rgba(178, 156, 255, 0.42);
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     }
-    @media (max-width: 768px) {
-      .hint {
-        display: none;
+    .mobile-help-toggle {
+      position: absolute;
+      top: max(0.7rem, env(safe-area-inset-top));
+      right: max(0.6rem, env(safe-area-inset-right));
+      width: 2rem;
+      height: 2rem;
+      border-radius: 999px;
+      border: 1px solid rgba(210, 206, 198, 0.95);
+      background: rgba(255, 255, 255, 0.92);
+      color: #262626;
+      font-size: 0.95rem;
+      font-weight: 700;
+      line-height: 1;
+      box-shadow: 0 8px 18px rgba(18, 22, 32, 0.16);
+      z-index: 5;
+      display: block;
+      pointer-events: auto;
+      cursor: pointer;
+    }
+    .mobile-help-toggle.night {
+      border-color: rgba(120, 214, 255, 0.48);
+      background: rgba(13, 19, 34, 0.88);
+      color: #e7f4ff;
+      box-shadow: 0 0 12px rgba(64, 224, 255, 0.2), 0 8px 18px rgba(3, 8, 18, 0.55);
+    }
+    .mobile-guide-banner {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: max(0.7rem, env(safe-area-inset-bottom));
+      margin: 0;
+      max-width: min(92vw, 370px);
+      padding: 0.45rem 0.68rem;
+      border-radius: 12px;
+      border: 1px solid rgba(209, 202, 192, 0.92);
+      background: rgba(255, 255, 255, 0.9);
+      color: #2a2a2a;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 0.68rem;
+      font-weight: 600;
+      line-height: 1.35;
+      text-align: center;
+      box-shadow: 0 8px 18px rgba(18, 22, 32, 0.16);
+      pointer-events: none;
+      z-index: 4;
+      display: block;
+    }
+    .mobile-guide-banner.night {
+      border-color: rgba(118, 203, 255, 0.45);
+      background: rgba(12, 19, 33, 0.84);
+      color: #e5f3ff;
+      box-shadow: 0 0 14px rgba(64, 224, 255, 0.16), 0 8px 20px rgba(3, 8, 18, 0.55);
+    }
+    .mobile-help-panel {
+      position: absolute;
+      top: calc(max(0.7rem, env(safe-area-inset-top)) + 2.35rem);
+      right: max(0.6rem, env(safe-area-inset-right));
+      width: min(78vw, 280px);
+      padding: 0.62rem 0.68rem;
+      border-radius: 12px;
+      border: 1px solid rgba(211, 204, 194, 0.94);
+      background: rgba(255, 255, 255, 0.93);
+      box-shadow: 0 10px 24px rgba(15, 21, 33, 0.2);
+      z-index: 5;
+      display: block;
+      pointer-events: auto;
+    }
+    .mobile-help-panel.night {
+      border-color: rgba(126, 213, 255, 0.46);
+      background: rgba(11, 18, 32, 0.9);
+      box-shadow: 0 0 16px rgba(64, 224, 255, 0.16), 0 12px 28px rgba(3, 8, 18, 0.58);
+    }
+    .mobile-help-title {
+      margin: 0 0 0.35rem 0;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 0.72rem;
+      font-weight: 750;
+      color: #1f2733;
+    }
+    .mobile-help-panel.night .mobile-help-title {
+      color: #e9f4ff;
+    }
+    .mobile-help-line {
+      margin: 0;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 0.67rem;
+      line-height: 1.35;
+      color: #3a4657;
+    }
+    .mobile-help-panel.night .mobile-help-line {
+      color: #bfd4ea;
+    }
+    .mobile-markers-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 3;
+      display: none;
+    }
+    .mobile-marker {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      display: flex;
+      align-items: center;
+      gap: 0.28rem;
+    }
+    .mobile-marker-dot {
+      width: 0.55rem;
+      height: 0.55rem;
+      border-radius: 999px;
+      background: rgba(124, 92, 255, 0.95);
+      box-shadow: 0 0 0 rgba(124, 92, 255, 0.42);
+      animation: markerPulse 1.8s ease-out infinite;
+      animation-delay: var(--delay, 0ms);
+      flex-shrink: 0;
+    }
+    .mobile-marker-label {
+      max-width: 7.4rem;
+      padding: 0.18rem 0.38rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(210, 203, 193, 0.92);
+      color: #2d3544;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 0.58rem;
+      font-weight: 650;
+      line-height: 1.1;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
+    @keyframes markerPulse {
+      0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(124, 92, 255, 0.48);
       }
+      70% {
+        transform: scale(1.06);
+        box-shadow: 0 0 0 10px rgba(124, 92, 255, 0);
+      }
+      100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(124, 92, 255, 0);
+      }
+    }
+    @media (max-width: 768px) {
       .hover-tooltip {
         display: none;
+      }
+      .mobile-guide-banner,
+      .mobile-markers-layer {
+        display: block;
       }
     }
   `]
@@ -167,6 +337,7 @@ const PORTFOLIO_SPECIALTY_LINE = 'Frontend Architecture | Scalable Web Applicati
 export class Scene3dComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvas') private canvasRef!: ElementRef<HTMLCanvasElement>;
   protected readonly state = inject(PortfolioStateService);
+  private readonly transition = inject(SceneTransitionService);
   protected readonly portfolioOwnerName = PORTFOLIO_OWNER_NAME;
   protected readonly portfolioRoleLine = PORTFOLIO_ROLE_LINE;
   protected readonly portfolioSpecialtyLine = PORTFOLIO_SPECIALTY_LINE;
@@ -203,6 +374,27 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
   private certificationsMeshes: THREE.Object3D[] = [];
   private contactMeshes: THREE.Object3D[] = [];
   private switchMeshes: THREE.Object3D[] = [];
+  private postItMeshes: THREE.Object3D[] = [];
+  private activePostItDrag: {
+    pointerId: number;
+    group: THREE.Group;
+    dragPlane: THREE.Mesh;
+    boardData: {
+      horizontalAxis: number;
+      verticalAxis: number;
+      depthAxis: number;
+      center: THREE.Vector3;
+      size: THREE.Vector3;
+    };
+    fixedDepth: number;
+    noteWidth: number;
+    noteHeight: number;
+    offset: THREE.Vector3;
+    startClientX: number;
+    startClientY: number;
+    moved: boolean;
+  } | null = null;
+  private suppressNextClick = false;
   private houseGroup: THREE.Group | null = null;
 
   private cameraTarget = { pos: new THREE.Vector3(), lookAt: new THREE.Vector3() };
@@ -212,13 +404,30 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
   private neonPulseTime = 0;
   private visualLightMode: 'day' | 'night' = 'day';
   private hoverPulseTime = 0;
-  private hoverHintTimer: ReturnType<typeof setTimeout> | null = null;
+  private mobileGuideHideTimer: ReturnType<typeof setTimeout> | null = null;
+  private mobileGuideFrameTick = 0;
+  private hasShownMobileGuideOnce = false;
 
-  protected readonly showHelpHint = signal(true);
+  private readonly mobileGuideAnchors = [
+    { id: 'about', label: 'Pizarra', section: 'sobre-mi' as const, position: [-1.9, 1.02, -0.62] as [number, number, number], delay: 0 },
+    { id: 'projects', label: 'PC', section: 'proyectos' as const, position: [0.2, 1.02, -0.48] as [number, number, number], delay: 180 },
+    { id: 'hobbies', label: 'Tocadiscos', section: 'hobbies' as const, position: [1.42, 0.96, -1.08] as [number, number, number], delay: 360 },
+    { id: 'certs', label: 'Cuadros', section: 'certificaciones' as const, position: [1.38, 1.28, -1.515] as [number, number, number], delay: 540 },
+    { id: 'contact', label: 'Telefono', section: 'contacto' as const, position: [0.76, 0.79, -0.23] as [number, number, number], delay: 720 },
+    { id: 'switch', label: 'Interruptor', section: 'switch' as const, position: [-1.9, 1.05, -0.42] as [number, number, number], delay: 900 }
+  ];
+
   protected readonly hoverTooltip = signal<{ label: string; x: number; y: number } | null>(null);
+  protected readonly isMobileUi = signal(false);
+  protected readonly showMobileGuideBanner = signal(false);
+  protected readonly showMobileHelpPanel = signal(false);
+  protected readonly mobileGuideMarkers = signal<Array<{ id: string; label: string; x: number; y: number; visible: boolean; delay: string }>>([]);
 
   private resizeHandler = () => this.handleResize();
-  private canvasPointerUpHandler = (e: PointerEvent) => this.onClick(e);
+  private canvasPointerUpHandler = (e: PointerEvent) => this.onPointerUp(e);
+  private canvasPointerDownHandler = (e: PointerEvent) => this.onPointerDown(e);
+  private canvasPointerMoveHandler = (e: PointerEvent) => this.onPointerDrag(e);
+  private canvasPointerCancelHandler = (e: PointerEvent) => this.onPointerCancel(e);
   private canvasMoveHandler = (e: MouseEvent) => this.onPointerMove(e);
   private canvasLeaveHandler = () => this.onPointerLeave();
 
@@ -237,6 +446,12 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
         else if (inside) this.animateCameraToDoor();
         else this.animateCameraTo(section);
       }
+      if (section !== 'home') {
+        this.showMobileHelpPanel.set(false);
+        this.showMobileGuideBanner.set(false);
+      } else {
+        this.maybeShowMobileGuideBanner();
+      }
       this.syncCanvasInteractivity(section);
     });
   }
@@ -251,21 +466,24 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     this.setupClick(canvas);
     this.animate();
     this.handleResize();
+    this.maybeShowMobileGuideBanner();
     window.addEventListener('resize', this.resizeHandler);
-    this.hoverHintTimer = setTimeout(() => this.showHelpHint.set(false), 9000);
   }
 
   ngOnDestroy(): void {
     window.removeEventListener('resize', this.resizeHandler);
     const canvas = this.canvasRef?.nativeElement;
     if (canvas) {
+      canvas.removeEventListener('pointerdown', this.canvasPointerDownHandler);
       canvas.removeEventListener('pointerup', this.canvasPointerUpHandler);
+      canvas.removeEventListener('pointermove', this.canvasPointerMoveHandler);
+      canvas.removeEventListener('pointercancel', this.canvasPointerCancelHandler);
       canvas.removeEventListener('mousemove', this.canvasMoveHandler);
       canvas.removeEventListener('mouseleave', this.canvasLeaveHandler);
     }
-    if (this.hoverHintTimer) {
-      clearTimeout(this.hoverHintTimer);
-      this.hoverHintTimer = null;
+    if (this.mobileGuideHideTimer) {
+      clearTimeout(this.mobileGuideHideTimer);
+      this.mobileGuideHideTimer = null;
     }
     cancelAnimationFrame(this.animationId);
     if (this.hoverMarker) {
@@ -285,7 +503,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
 
   private initScene(canvas: HTMLCanvasElement): void {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(theme.sceneBgDay);
+    this.scene.background = new THREE.Color(0xeef2e8);
 
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
     const home = this.getResponsiveCameraTarget(CAMERA_POSITIONS.home, 'home');
@@ -435,6 +653,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     this.certificationsMeshes = [];
     this.contactMeshes = [];
     this.switchMeshes = [];
+    this.postItMeshes = [];
 
     parent.traverse((obj) => {
       if (!(obj instanceof THREE.Mesh)) return;
@@ -586,6 +805,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     this.contactMeshes = [];
     this.switchMeshes = [];
     this.doorMeshes = [];
+    this.postItMeshes = [];
 
     const office = new THREE.Group();
     office.name = 'procedural_office';
@@ -697,9 +917,10 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       section: 'proyectos'
     });
     office.add(this.createMonitorOverlay());
-    this.addContactShadow(office, [-0.41, 0.009, -0.35], [0.86, 0.52], 0.17, 'contact_shadow_desk');
-    this.addContactShadow(office, [-0.23, 0.009, -0.50], [0.24, 0.16], 0.24, 'contact_shadow_cpu');
-    this.addContactShadow(office, [-1.28, 0.009, -0.58], [0.26, 0.21], 0.18, 'contact_shadow_plant');
+    this.addContactShadow(office, [-0.41, 0.009, -0.35], [0.86, 0.52], 0.17, 'contact_shadow_desk', 0.04);
+    // CPU shadow: slight offset + tilt to match the desk key light projection.
+    this.addContactShadow(office, [-0.27, 0.009, -0.62], [0.26, 0.18], 0.2, 'contact_shadow_cpu', -0.52);
+    this.addContactShadow(office, [-1.28, 0.009, -0.58], [0.26, 0.21], 0.18, 'contact_shadow_plant', 0.02);
 
     this.addOfficeAsset(office, '/models/office/Low poly phone.glb', {
       name: 'office_phone',
@@ -1087,21 +1308,21 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       this.accentLights.push(light);
     };
 
-    makeAccent(0xb29cff, [-0.34, 1.08, -0.62], 1.5, 0.04, 0.24, 0.55);
-    makeAccent(0x9f86ff, [-0.18, 0.34, -0.12], 1.9, 0.0, 0.2, 1.0);
-    makeAccent(0x7c5cff, [-0.34, 0.56, -0.56], 1.6, 0.0, 0.24, 1.05);
-    makeAccent(0x7c5cff, [-0.34, 0.38, -0.56], 1.55, 0.0, 0.17, 0.95);
-    makeAccent(0x8f72ff, [0.28, 0.86, -0.62], 1.6, 0.0, 0.17, 1.6);
-    makeAccent(0x7c5cff, [1.34, 0.38, -0.84], 1.4, 0.0, 0.14, 0.5);
-    makeAccent(0xd86dff, [-1.78, 1.52, 0.12], 1.5, 0.0, 0.18, 2.2);
-    makeAccent(0xff66c8, [-1.72, 1.68, 0.18], 2.35, 0.0, 0.34, 0.2);
-    makeAccent(0x7c5cff, [-1.72, 1.68, -0.92], 2.35, 0.0, 0.25, 0.95);
-    makeAccent(0x8f72ff, [1.58, 1.68, -1.28], 2.2, 0.0, 0.24, 1.6);
-    makeAccent(0x6f56df, [0.92, 1.68, -1.28], 2.15, 0.0, 0.22, 2.3);
-    makeAccent(0x7c5cff, [-1.9, 0.95, -1.48], 3.2, 0.0, 0.54, 0.2);
-    makeAccent(0xb29cff, [-1.72, 1.28, -1.46], 2.7, 0.0, 0.34, 1.7);
+    makeAccent(0x6dffd0, [-0.34, 1.08, -0.62], 1.5, 0.04, 0.24, 0.55);
+    makeAccent(0x5effc6, [-0.18, 0.34, -0.12], 1.9, 0.0, 0.2, 1.0);
+    makeAccent(0x47ffe0, [-0.34, 0.56, -0.56], 1.6, 0.0, 0.24, 1.05);
+    makeAccent(0x47ffe0, [-0.34, 0.38, -0.56], 1.55, 0.0, 0.17, 0.95);
+    makeAccent(0x4feaff, [0.28, 0.86, -0.62], 1.6, 0.0, 0.17, 1.6);
+    makeAccent(0x43ffd6, [1.34, 0.38, -0.84], 1.4, 0.0, 0.14, 0.5);
+    makeAccent(0x56ffb7, [-1.78, 1.52, 0.12], 1.5, 0.0, 0.18, 2.2);
+    makeAccent(0x44ffca, [-1.72, 1.68, 0.18], 2.35, 0.0, 0.34, 0.2);
+    makeAccent(0x43e8ff, [-1.72, 1.68, -0.92], 2.35, 0.0, 0.25, 0.95);
+    makeAccent(0x52f9ff, [1.58, 1.68, -1.28], 2.2, 0.0, 0.24, 1.6);
+    makeAccent(0x40d7ff, [0.92, 1.68, -1.28], 2.15, 0.0, 0.22, 2.3);
+    makeAccent(0x47ffd7, [-1.9, 0.95, -1.48], 3.2, 0.0, 0.54, 0.2);
+    makeAccent(0x6dfed1, [-1.72, 1.28, -1.46], 2.7, 0.0, 0.34, 1.7);
 
-    const lampGlow = new THREE.PointLight(0x7c5cff, 0.72, 3.4);
+    const lampGlow = new THREE.PointLight(0x42ffe0, 0.72, 3.4);
     lampGlow.position.set(-1.88, 1.07, -1.44);
     lampGlow.userData['dayIntensity'] = 0;
     lampGlow.userData['nightIntensity'] = 0.9;
@@ -1110,7 +1331,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     office.add(lampGlow);
     this.accentLights.push(lampGlow);
 
-    const cpuGlow = new THREE.PointLight(0x8f72ff, 0.16, 1.55);
+    const cpuGlow = new THREE.PointLight(0x49f4ff, 0.16, 1.55);
     cpuGlow.position.set(-0.21, 1.01, -0.46);
     cpuGlow.userData['dayIntensity'] = 0;
     cpuGlow.userData['nightIntensity'] = 0.23;
@@ -1118,7 +1339,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     office.add(cpuGlow);
     this.accentLights.push(cpuGlow);
 
-    const keyboardGlow = new THREE.PointLight(0x8f72ff, 0.13, 1.2);
+    const keyboardGlow = new THREE.PointLight(0x57ffd2, 0.13, 1.2);
     keyboardGlow.position.set(-0.36, 0.96, -0.42);
     keyboardGlow.userData['dayIntensity'] = 0;
     keyboardGlow.userData['nightIntensity'] = 0.18;
@@ -1126,7 +1347,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     office.add(keyboardGlow);
     this.accentLights.push(keyboardGlow);
 
-    const baseGlow = new THREE.PointLight(0x7c5cff, 0.16, 3.2);
+    const baseGlow = new THREE.PointLight(0x39ffd0, 0.16, 3.2);
     baseGlow.position.set(0, 0.14, -1.42);
     baseGlow.userData['dayIntensity'] = 0;
     baseGlow.userData['nightIntensity'] = 0.24;
@@ -1159,6 +1380,13 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
 
     const noteW = Math.max(getComp(size, horizontalAxis) * 0.16, 0.09);
     const noteH = Math.max(getComp(size, verticalAxis) * 0.18, 0.1);
+    const boardData = {
+      horizontalAxis,
+      verticalAxis,
+      depthAxis,
+      center: center.clone(),
+      size: size.clone()
+    };
 
     const notes: Array<{ x: number; y: number; rot: number }> = [
       { x: -0.22, y: 0.18, rot: -0.14 },
@@ -1180,15 +1408,34 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     });
     const noteGeo = new THREE.PlaneGeometry(noteW, noteH);
     const pinGeo = new THREE.SphereGeometry(Math.max(noteW * 0.06, 0.008), 10, 10);
+    const dragPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(getComp(size, horizontalAxis), getComp(size, verticalAxis)),
+      new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide,
+        colorWrite: false,
+        depthWrite: false
+      })
+    );
+    dragPlane.name = 'postit_drag_plane';
+    const planePos = center.clone();
+    setComp(planePos, depthAxis, front + 0.0002);
+    dragPlane.position.copy(planePos);
+    if (depthAxis === 0) dragPlane.rotation.y = Math.PI / 2;
+    else if (depthAxis === 1) dragPlane.rotation.x = Math.PI / 2;
+    dragPlane.visible = false;
+    wrapper.add(dragPlane);
 
     notes.forEach((n, idx) => {
+      const group = new THREE.Group();
+      group.name = `postit_group_${idx}`;
       const note = new THREE.Mesh(noteGeo, noteMat.clone());
       note.name = `postit_note_${idx}`;
       const notePos = center.clone();
       setComp(notePos, horizontalAxis, getComp(center, horizontalAxis) + n.x * getComp(size, horizontalAxis));
       setComp(notePos, verticalAxis, getComp(center, verticalAxis) + n.y * getComp(size, verticalAxis));
       setComp(notePos, depthAxis, front + idx * 0.0003);
-      note.position.copy(notePos);
       note.rotation.z = n.rot;
       if (depthAxis === 0) note.rotation.y = Math.PI / 2;
       else if (depthAxis === 1) note.rotation.x = Math.PI / 2;
@@ -1197,7 +1444,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
 
       const pin = new THREE.Mesh(pinGeo, pinMat.clone());
       pin.name = `postit_pin_${idx}`;
-      const pinPos = note.position.clone();
+      const pinPos = new THREE.Vector3();
       setComp(pinPos, horizontalAxis, getComp(pinPos, horizontalAxis) + noteW * 0.2);
       setComp(pinPos, verticalAxis, getComp(pinPos, verticalAxis) + noteH * 0.22);
       setComp(pinPos, depthAxis, getComp(pinPos, depthAxis) + 0.0018);
@@ -1205,7 +1452,18 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       pin.castShadow = true;
       pin.receiveShadow = true;
 
-      wrapper.add(note, pin);
+      group.position.copy(notePos);
+      group.add(note, pin);
+      group.userData['postItDragPlane'] = dragPlane;
+      group.userData['postItBoardData'] = boardData;
+      group.userData['postItFixedDepth'] = getComp(notePos, depthAxis);
+      group.userData['postItNoteWidth'] = noteW;
+      group.userData['postItNoteHeight'] = noteH;
+      note.userData['postItGroup'] = group;
+      pin.userData['postItGroup'] = group;
+
+      wrapper.add(group);
+      this.postItMeshes.push(note, pin);
     });
   }
 
@@ -1630,10 +1888,126 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
   }
 
   private setupClick(canvas: HTMLCanvasElement): void {
+    canvas.addEventListener('pointerdown', this.canvasPointerDownHandler);
     canvas.addEventListener('pointerup', this.canvasPointerUpHandler);
+    canvas.addEventListener('pointermove', this.canvasPointerMoveHandler);
+    canvas.addEventListener('pointercancel', this.canvasPointerCancelHandler);
     canvas.addEventListener('mousemove', this.canvasMoveHandler);
     canvas.addEventListener('mouseleave', this.canvasLeaveHandler);
   }
+  private onPointerDown(event: PointerEvent): void {
+    if (this.state.currentSection() !== 'home') return;
+    if (event.pointerType === 'touch') {
+      this.dismissMobileGuideBanner();
+    }
+    this.setRayFromEvent(event);
+    const postItHit = this.raycaster.intersectObjects(this.postItMeshes, true)[0];
+    if (!postItHit) return;
+    const group = postItHit.object.userData['postItGroup'] as THREE.Group | undefined;
+    const dragPlane = group?.userData['postItDragPlane'] as THREE.Mesh | undefined;
+    const boardData = group?.userData['postItBoardData'] as
+      | {
+          horizontalAxis: number;
+          verticalAxis: number;
+          depthAxis: number;
+          center: THREE.Vector3;
+          size: THREE.Vector3;
+        }
+      | undefined;
+    const fixedDepth = group?.userData['postItFixedDepth'] as number | undefined;
+    const noteWidth = group?.userData['postItNoteWidth'] as number | undefined;
+    const noteHeight = group?.userData['postItNoteHeight'] as number | undefined;
+    if (!group || !dragPlane || !boardData || fixedDepth === undefined || noteWidth === undefined || noteHeight === undefined) return;
+
+    this.clearHoverFeedback();
+    this.controls.enabled = false;
+    this.renderer.domElement.style.cursor = 'grabbing';
+    const groupWorldPos = group.getWorldPosition(new THREE.Vector3());
+    this.activePostItDrag = {
+      pointerId: event.pointerId,
+      group,
+      dragPlane,
+      boardData,
+      fixedDepth,
+      noteWidth,
+      noteHeight,
+      offset: groupWorldPos.sub(postItHit.point),
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      moved: false
+    };
+    this.renderer.domElement.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  private onPointerDrag(event: PointerEvent): void {
+    if (!this.activePostItDrag) return;
+    if (event.pointerId !== this.activePostItDrag.pointerId) return;
+    this.setRayFromEvent(event);
+
+    const dragHit = this.raycaster.intersectObject(this.activePostItDrag.dragPlane, true)[0];
+    if (!dragHit) return;
+    const drag = this.activePostItDrag;
+    const pointerDist = Math.hypot(event.clientX - drag.startClientX, event.clientY - drag.startClientY);
+    if (pointerDist > 3) drag.moved = true;
+
+    const parent = drag.group.parent;
+    if (!parent) return;
+
+    const newWorldPos = dragHit.point.clone().add(drag.offset);
+    const newLocalPos = parent.worldToLocal(newWorldPos);
+
+    const getComp = (v: THREE.Vector3, axis: number): number => (axis === 0 ? v.x : axis === 1 ? v.y : v.z);
+    const setComp = (v: THREE.Vector3, axis: number, value: number): void => {
+      if (axis === 0) v.x = value;
+      else if (axis === 1) v.y = value;
+      else v.z = value;
+    };
+
+    const halfW = drag.noteWidth * 0.52;
+    const halfH = drag.noteHeight * 0.52;
+    const hAxis = drag.boardData.horizontalAxis;
+    const vAxis = drag.boardData.verticalAxis;
+    const dAxis = drag.boardData.depthAxis;
+    const center = drag.boardData.center;
+    const size = drag.boardData.size;
+    const hMin = getComp(center, hAxis) - getComp(size, hAxis) * 0.5 + halfW;
+    const hMax = getComp(center, hAxis) + getComp(size, hAxis) * 0.5 - halfW;
+    const vMin = getComp(center, vAxis) - getComp(size, vAxis) * 0.5 + halfH;
+    const vMax = getComp(center, vAxis) + getComp(size, vAxis) * 0.5 - halfH;
+
+    setComp(newLocalPos, hAxis, THREE.MathUtils.clamp(getComp(newLocalPos, hAxis), hMin, hMax));
+    setComp(newLocalPos, vAxis, THREE.MathUtils.clamp(getComp(newLocalPos, vAxis), vMin, vMax));
+    setComp(newLocalPos, dAxis, drag.fixedDepth);
+    drag.group.position.copy(newLocalPos);
+    event.preventDefault();
+  }
+
+  private endPostItDrag(event: PointerEvent): boolean {
+    const drag = this.activePostItDrag;
+    if (!drag) return false;
+    if (event.pointerId !== drag.pointerId) return true;
+    this.activePostItDrag = null;
+    this.controls.enabled = true;
+    this.renderer.domElement.style.cursor = 'grab';
+    if (this.renderer.domElement.hasPointerCapture(event.pointerId)) {
+      this.renderer.domElement.releasePointerCapture(event.pointerId);
+    }
+    if (drag.moved) {
+      this.suppressNextClick = true;
+    }
+    return true;
+  }
+
+  private onPointerUp(event: PointerEvent): void {
+    if (this.endPostItDrag(event)) return;
+    this.onClick(event);
+  }
+
+  private onPointerCancel(event: PointerEvent): void {
+    void this.endPostItDrag(event);
+  }
+
 
   private setRayFromEvent(event: Pick<MouseEvent, 'clientX' | 'clientY'>): void {
     const rect = this.renderer.domElement.getBoundingClientRect();
@@ -1727,6 +2101,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
   }
 
   private onPointerMove(event: MouseEvent): void {
+    if (this.activePostItDrag) return;
     this.setRayFromEvent(event);
     const closest = this.getClosestInteractiveHit(this.getInteractiveGroups());
     if (!closest) {
@@ -1743,10 +2118,11 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       y: event.clientY - rect.top - 8
     });
     this.updateHoverMarker(closest.hit);
-    this.showHelpHint.set(false);
+    this.dismissMobileGuideBanner();
   }
 
   private onPointerLeave(): void {
+    if (this.activePostItDrag) return;
     this.renderer.domElement.style.cursor = 'grab';
     this.clearHoverFeedback();
   }
@@ -1773,14 +2149,30 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
   }
 
   private onClick(event: Pick<MouseEvent, 'clientX' | 'clientY'>): void {
+    if (this.suppressNextClick) {
+      this.suppressNextClick = false;
+      return;
+    }
     this.setRayFromEvent(event);
 
     const sectionHit = this.getClosestSectionHit(this.getInteractiveGroups());
 
     if (!sectionHit) return;
+    this.dismissMobileGuideBanner();
 
     if (sectionHit === 'switch') {
-      this.state.toggleLightMode();
+      void this.transition.run(
+        {
+          kind: 'theme',
+          label: 'Ajustando luces de la escena...',
+          minVisibleMs: 420,
+          startTaskDelayMs: 180
+        },
+        async () => {
+          this.state.toggleLightMode();
+          await this.wait(140);
+        }
+      );
       return;
     }
     if (sectionHit === 'sobre-mi') {
@@ -1788,7 +2180,19 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       return;
     }
     if (sectionHit === 'door') {
-      if (!this.state.hasEnteredHouse()) this.state.enterHouse();
+      if (!this.state.hasEnteredHouse()) {
+        void this.transition.run(
+          {
+            kind: 'door',
+            label: 'Entrando a la oficina...',
+            minVisibleMs: 620
+          },
+          async () => {
+            this.state.enterHouse();
+            await this.wait(240);
+          }
+        );
+      }
       return;
     }
 
@@ -1865,7 +2269,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     if (!this.scene) return;
 
     if (mode === 'day') {
-      this.scene.background = new THREE.Color(theme.sceneBgDay);
+      this.scene.background = new THREE.Color(0xeef2e8);
       this.scene.fog = null;
       this.ambientLight.color.setHex(theme.sceneLightDay);
       this.ambientLight.intensity = 0.68;
@@ -1891,19 +2295,19 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       this.renderer.toneMappingExposure = 1.2;
       this.applyOfficePalette('day');
     } else {
-      this.scene.background = new THREE.Color(theme.sceneBgNight);
+      this.scene.background = new THREE.Color(0x08130f);
       this.scene.fog = null;
-      this.ambientLight.color.setHex(theme.sceneLightNight);
-      this.ambientLight.intensity = 0.34;
-      this.directionalLight.color.setHex(theme.sceneLightNight);
-      this.directionalLight.intensity = 0.44;
-      this.fillLight.color.setHex(theme.sceneLightNight);
-      this.fillLight.intensity = 0.22;
-      this.deskKeyLight.color.setHex(0xcbe8ff);
-      this.deskKeyLight.intensity = 0.52;
+      this.ambientLight.color.setHex(0x17342a);
+      this.ambientLight.intensity = 0.36;
+      this.directionalLight.color.setHex(0x122a22);
+      this.directionalLight.intensity = 0.42;
+      this.fillLight.color.setHex(0x113129);
+      this.fillLight.intensity = 0.24;
+      this.deskKeyLight.color.setHex(0x8ffff4);
+      this.deskKeyLight.intensity = 0.56;
       this.deskKeyLight.shadow.normalBias = 0.028;
-      this.warmSideLight.color.setHex(0xc65cff);
-      this.warmSideLight.intensity = 0.25;
+      this.warmSideLight.color.setHex(0x39ffd2);
+      this.warmSideLight.intensity = 0.28;
       this.createRgbLights();
       this.hexGlowLights.forEach((l) => {
         l.visible = true;
@@ -1927,7 +2331,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
 
       if (obj instanceof THREE.LineSegments && name.includes('rgb_hex_outline')) {
         const lineMat = obj.material as THREE.LineBasicMaterial;
-        lineMat.color.setHex(mode === 'day' ? 0xa694dc : 0x8773cb);
+        lineMat.color.setHex(mode === 'day' ? 0xa694dc : 0x50f3dc);
         lineMat.opacity = mode === 'day' ? 0.86 : 0.52;
         lineMat.transparent = true;
         lineMat.needsUpdate = true;
@@ -1940,20 +2344,20 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       if (name.includes('led_strip_back')) {
         mat.transparent = mode === 'day';
         mat.opacity = mode === 'day' ? 0.16 : 1;
-        mat.color.setHex(mode === 'day' ? 0xf3f0ff : 0xe8ddff);
-        mat.emissive.setHex(mode === 'day' ? 0xede9ff : 0x7c5cff);
+        mat.color.setHex(mode === 'day' ? 0xf3f0ff : 0xd8fff6);
+        mat.emissive.setHex(mode === 'day' ? 0xede9ff : 0x31ffd8);
         mat.emissiveIntensity = mode === 'day' ? 0.05 : 0;
       } else if (name.includes('led_strip_left')) {
         mat.transparent = mode === 'day';
         mat.opacity = mode === 'day' ? 0.14 : 1;
-        mat.color.setHex(mode === 'day' ? 0xf3f0ff : 0xe8ddff);
-        mat.emissive.setHex(mode === 'day' ? 0xe9e2ff : 0x8f72ff);
+        mat.color.setHex(mode === 'day' ? 0xf3f0ff : 0xe4fff2);
+        mat.emissive.setHex(mode === 'day' ? 0xe9e2ff : 0x59ffb8);
         mat.emissiveIntensity = mode === 'day' ? 0.04 : 0.8;
       } else if (name.includes('led_strip_right')) {
         mat.transparent = mode === 'day';
         mat.opacity = mode === 'day' ? 0.14 : 1;
-        mat.color.setHex(mode === 'day' ? 0xeee9ff : 0xe8ddff);
-        mat.emissive.setHex(mode === 'day' ? 0xdfd5ff : 0x6f56df);
+        mat.color.setHex(mode === 'day' ? 0xeee9ff : 0xddfbff);
+        mat.emissive.setHex(mode === 'day' ? 0xdfd5ff : 0x40e8ff);
         mat.emissiveIntensity = mode === 'day' ? 0.04 : 0.48;
       } else if (name.includes('led_desk_front')) {
         mat.transparent = mode === 'day';
@@ -1975,7 +2379,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
         mat.emissiveIntensity = mode === 'day' ? 0 : 0.3;
       } else if (name.includes('rgb_lamp_tube')) {
         mat.color.setHex(mode === 'day' ? 0xdce3ee : 0xfef3ff);
-        mat.emissive.setHex(mode === 'day' ? 0x000000 : 0x8f72ff);
+        mat.emissive.setHex(mode === 'day' ? 0x000000 : 0x58ffe0);
         mat.emissiveIntensity = mode === 'day' ? 0 : 1.28;
       } else if (
         name.includes('rgb_lamp_base') ||
@@ -1985,14 +2389,26 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       ) {
         mat.color.setHex(mode === 'day' ? 0xcfd8e6 : 0x1b2030);
       } else if (name.includes('rgb_hex_face')) {
-        const baseColor = (obj.userData['baseColorHex'] as number) ?? 0xf0e8ff;
-        const baseEmissive = (obj.userData['baseEmissiveHex'] as number) ?? 0xc88ce8;
+        const dayColor = (obj.userData['baseColorHex'] as number) ?? 0xf0e8ff;
+        const dayEmissive = (obj.userData['baseEmissiveHex'] as number) ?? 0xc88ce8;
+        const idxMatch = name.match(/rgb_hex_face_(\d+)/);
+        const idx = idxMatch ? Number.parseInt(idxMatch[1] ?? '0', 10) : 0;
+        const nightFacePalette = [0x6dffba, 0x46ffd6, 0x58f8ff, 0x3ed6ff, 0x6ceeff, 0x5fffd1, 0x85ffd9];
+        const nightFaceEmissive = [0x22ff9f, 0x18f4c7, 0x23e9ff, 0x16bbff, 0x2de0ff, 0x25ffc2, 0x4afccd];
+        const baseColor = mode === 'day' ? dayColor : nightFacePalette[idx % nightFacePalette.length]!;
+        const baseEmissive = mode === 'day' ? dayEmissive : nightFaceEmissive[idx % nightFaceEmissive.length]!;
         mat.color.setHex(baseColor);
         mat.emissive.setHex(baseEmissive);
         mat.emissiveIntensity = mode === 'day' ? 0.09 : 0.42;
       } else if (name.includes('rgb_hex_back')) {
-        const baseColor = (obj.userData['baseColorHex'] as number) ?? 0xc4bfdc;
-        const baseEmissive = (obj.userData['baseEmissiveHex'] as number) ?? 0x6f6a9e;
+        const dayColor = (obj.userData['baseColorHex'] as number) ?? 0xc4bfdc;
+        const dayEmissive = (obj.userData['baseEmissiveHex'] as number) ?? 0x6f6a9e;
+        const idxMatch = name.match(/rgb_hex_back_(\d+)/);
+        const idx = idxMatch ? Number.parseInt(idxMatch[1] ?? '0', 10) : 0;
+        const nightBackPalette = [0x1f4f41, 0x1e5348, 0x1e4a57, 0x204f66, 0x225364, 0x1f5a4f, 0x245a55];
+        const nightBackEmissive = [0x22cfa4, 0x18d5b6, 0x18b7da, 0x1ea4df, 0x22b4e2, 0x18cfa3, 0x24cfb5];
+        const baseColor = mode === 'day' ? dayColor : nightBackPalette[idx % nightBackPalette.length]!;
+        const baseEmissive = mode === 'day' ? dayEmissive : nightBackEmissive[idx % nightBackEmissive.length]!;
         mat.color.setHex(baseColor);
         mat.emissive.setHex(baseEmissive);
         mat.emissiveIntensity = mode === 'day' ? 0.06 : 0.1;
@@ -2030,18 +2446,18 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       } else if (name.includes('monitor_overlay_frame')) {
         mat.color.setHex(mode === 'day' ? 0x111722 : 0x0a101b);
       } else if (name.includes('monitor_overlay_screen')) {
-        mat.color.setHex(mode === 'day' ? 0xe8e3ff : 0xb29cff);
-        mat.emissive.setHex(mode === 'day' ? 0x8f72ff : 0x9f86ff);
+        mat.color.setHex(mode === 'day' ? 0xe8e3ff : 0xb8fff2);
+        mat.emissive.setHex(mode === 'day' ? 0x8f72ff : 0x53ffdf);
         mat.emissiveIntensity = mode === 'day' ? 0.18 : 0.4;
         mat.roughness = mode === 'day' ? 0.3 : 0.2;
       } else if (name.includes('back_wall')) {
-        mat.color.setHex(mode === 'day' ? 0xe7edf8 : 0x2a2340);
+        mat.color.setHex(mode === 'day' ? 0xd4e0cf : 0x21352b);
       } else if (name.includes('wall') || name.includes('column')) {
-        mat.color.setHex(mode === 'day' ? 0xf2f6ff : 0x31284a);
+        mat.color.setHex(mode === 'day' ? 0xe1eadb : 0x2a4436);
       } else if (name.includes('floor')) {
-        mat.color.setHex(mode === 'day' ? 0xd8cdbd : 0x1d1b28);
+        mat.color.setHex(mode === 'day' ? 0xcab69a : 0x1d1b28);
       } else if (name.includes('rug')) {
-        mat.color.setHex(mode === 'day' ? 0xf6f6f3 : 0xd8dce5);
+        mat.color.setHex(mode === 'day' ? 0xecf0e6 : 0xd5e4de);
         mat.roughness = mode === 'day' ? 0.95 : 0.9;
       } else if (name.includes('mate_gourd')) {
         mat.color.setHex(mode === 'day' ? 0x7e5b3d : 0x614531);
@@ -2059,16 +2475,16 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
         mat.emissiveIntensity = 0;
       } else if (name.includes('frame_rgb_glow')) {
         const glowMat = mat as unknown as THREE.MeshBasicMaterial;
-        glowMat.color.setHex(mode === 'day' ? 0xf5c8a4 : 0xd6a2ff);
+        glowMat.color.setHex(mode === 'day' ? 0xf5c8a4 : 0x67ffe4);
         glowMat.transparent = true;
         glowMat.opacity = mode === 'day' ? 0 : 0.13;
       } else if (name.includes('cert_frame_border')) {
-        mat.color.setHex(mode === 'day' ? 0x6d5745 : 0x4c566d);
+        mat.color.setHex(mode === 'day' ? 0x6d5745 : 0x3f5d57);
       } else if (name.includes('cert_frame_mat')) {
         mat.color.setHex(mode === 'day' ? 0xf4f0e8 : 0xd9d6cf);
       } else if (name.includes('cert_frame_art')) {
         mat.color.setHex(mode === 'day' ? 0xffffff : 0xe9edf8);
-        mat.emissive.setHex(mode === 'day' ? 0x000000 : 0x2d3852);
+        mat.emissive.setHex(mode === 'day' ? 0x000000 : 0x1a4038);
         mat.emissiveIntensity = mode === 'day' ? 0 : 0.12;
       } else if (name.includes('cert_frame_glass')) {
         mat.color.setHex(mode === 'day' ? 0xffffff : 0xc9d8f2);
@@ -2250,7 +2666,8 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     position: [number, number, number],
     size: [number, number],
     opacity: number,
-    name: string
+    name: string,
+    rotationZ = 0
   ): void {
     const shadow = new THREE.Mesh(
       new THREE.CircleGeometry(0.5, 28),
@@ -2265,6 +2682,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     );
     shadow.position.set(...position);
     shadow.rotation.x = -Math.PI / 2;
+    shadow.rotation.z = rotationZ;
     shadow.scale.set(size[0], size[1], 1);
     shadow.name = name;
     shadow.receiveShadow = false;
@@ -2336,11 +2754,11 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       light.intensity = base * pulse;
       if (light.userData['isBaseRgbGlow']) {
         const t = (Math.sin(this.neonPulseTime * 0.9) + 1) * 0.5;
-        const hue = 0.9 - t * 0.16;
+        const hue = 0.45 + t * 0.08;
         light.color.setHSL(hue, 1, 0.58);
       } else if (light.userData['isLampRgbGlow']) {
         const t = (Math.sin(this.neonPulseTime * 1.4 + phase) + 1) * 0.5;
-        const hue = 0.9 - t * 0.16;
+        const hue = 0.49 + t * 0.06;
         light.color.setHSL(hue, 1, 0.62);
         light.intensity = base * (0.95 + t * 0.5);
       }
@@ -2363,18 +2781,12 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       mats.forEach((m) => {
         const mat = m as THREE.MeshStandardMaterial;
         const baseIntensity = (obj.userData['baseIntensity'] as number) ?? 0.72;
-        const baseColor = (obj.userData['baseColorHex'] as number) ?? (name.includes('rgb_hex_face') ? 0xf0e8ff : 0xc4bfdc);
-        const baseEmissive = (obj.userData['baseEmissiveHex'] as number) ?? (name.includes('rgb_hex_face') ? 0xc88ce8 : 0x6f6a9e);
         const phase = (obj.userData['phase'] as number) ?? 0;
         const t = (Math.sin(this.neonPulseTime * 1.08 + phase) + 1) * 0.5;
 
         if (name.includes('rgb_hex_face')) {
-          mat.color.setHex(baseColor);
-          mat.emissive.setHex(baseEmissive);
           mat.emissiveIntensity = baseIntensity * (0.46 + t * 0.18);
         } else {
-          mat.color.setHex(baseColor);
-          mat.emissive.setHex(baseEmissive);
           mat.emissiveIntensity = 0.04 + t * 0.06;
         }
       });
@@ -2395,7 +2807,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       mats.forEach((mat) => {
         if (name.includes('rgb_lamp_tube')) {
           if (!(mat instanceof THREE.MeshStandardMaterial)) return;
-          const hue = 0.9 - t * 0.16;
+          const hue = 0.48 + t * 0.07;
           mat.emissive.setHSL(hue, 1, 0.62);
           mat.emissiveIntensity = 1.1 + t * 0.55;
           return;
@@ -2403,7 +2815,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
 
         if (name.includes('rgb_lamp_halo')) {
           if (!(mat instanceof THREE.MeshBasicMaterial)) return;
-          const hue = 0.9 - t * 0.16;
+          const hue = 0.48 + t * 0.07;
           mat.color.setHSL(hue, 1, 0.62);
           mat.opacity = 0.28 + t * 0.24;
           return;
@@ -2413,7 +2825,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
           if (!(mat instanceof THREE.MeshBasicMaterial)) return;
           const phase = (obj.userData['phase'] as number) ?? 0;
           const w = (Math.sin(this.neonPulseTime * 1.2 + phase) + 1) * 0.5;
-          mat.color.setHSL(0.58, 0.34, 0.72);
+          mat.color.setHSL(0.5, 0.56, 0.66);
           mat.opacity = 0.05 + w * 0.05;
         }
       });
@@ -2494,6 +2906,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
     const profile = this.getViewportProfile();
+    this.isMobileUi.set(profile !== 'desktop');
 
     this.camera.fov = profile === 'desktop' ? 50 : profile === 'mobile' ? 66 : 78;
     this.camera.aspect = width / height;
@@ -2501,6 +2914,8 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, profile === 'desktop' ? 2 : 1.6));
     this.renderer.setSize(width, height);
     this.applyResponsiveControlLimits();
+    this.updateMobileGuideMarkers();
+    this.maybeShowMobileGuideBanner();
   }
 
   private getViewportProfile(): 'desktop' | 'mobile' | 'narrow-mobile' {
@@ -2508,6 +2923,12 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     if (w <= 430) return 'narrow-mobile';
     if (w <= 768) return 'mobile';
     return 'desktop';
+  }
+
+  private wait(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, Math.max(0, ms));
+    });
   }
 
   private getResponsiveCameraTarget(base: CameraTarget, context: 'home' | 'door' | 'default' = 'default'): CameraTarget {
@@ -2602,11 +3023,67 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  protected toggleMobileHelpPanel(): void {
+    const next = !this.showMobileHelpPanel();
+    this.showMobileHelpPanel.set(next);
+    if (next) this.dismissMobileGuideBanner();
+  }
+
+  private maybeShowMobileGuideBanner(): void {
+    if (!this.isMobileUi()) return;
+    if (this.state.currentSection() !== 'home') return;
+    if (this.hasShownMobileGuideOnce) return;
+    this.hasShownMobileGuideOnce = true;
+    this.showMobileGuideBanner.set(true);
+    if (this.mobileGuideHideTimer) clearTimeout(this.mobileGuideHideTimer);
+    this.mobileGuideHideTimer = setTimeout(() => this.showMobileGuideBanner.set(false), 7000);
+  }
+
+  private dismissMobileGuideBanner(): void {
+    if (!this.showMobileGuideBanner()) return;
+    this.showMobileGuideBanner.set(false);
+    if (this.mobileGuideHideTimer) {
+      clearTimeout(this.mobileGuideHideTimer);
+      this.mobileGuideHideTimer = null;
+    }
+  }
+
+  private updateMobileGuideMarkers(): void {
+    if (!this.isMobileUi() || this.state.currentSection() !== 'home' || !this.renderer || !this.camera) {
+      if (this.mobileGuideMarkers().length > 0) this.mobileGuideMarkers.set([]);
+      return;
+    }
+
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const markers = this.mobileGuideAnchors.map((anchor) => {
+      const v = new THREE.Vector3(...anchor.position).project(this.camera);
+      const x = (v.x * 0.5 + 0.5) * rect.width;
+      const y = (-v.y * 0.5 + 0.5) * rect.height;
+      const visible = v.z > -1 && v.z < 1 && x > 8 && x < rect.width - 8 && y > 8 && y < rect.height - 8;
+      return {
+        id: anchor.id,
+        label: anchor.label,
+        x,
+        y,
+        visible,
+        delay: `${anchor.delay}ms`
+      };
+    });
+
+    this.mobileGuideMarkers.set(markers);
+  }
+
   private animate = (): void => {
     this.animationId = requestAnimationFrame(this.animate);
     this.updateCameraAnimation();
     this.updateNeonPulse();
     this.updateMonitorOverlay();
+    this.mobileGuideFrameTick += 1;
+    if (this.mobileGuideFrameTick % 2 === 0) {
+      this.updateMobileGuideMarkers();
+    }
     if (this.hoverMarker?.visible) {
       this.hoverPulseTime += 0.08;
       const pulse = 0.92 + Math.sin(this.hoverPulseTime) * 0.16;
