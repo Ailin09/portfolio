@@ -14,6 +14,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Raycaster, Vector2 } from 'three';
 import { PortfolioStateService } from '../../core/portfolio-state.service';
 import { SceneTransitionService } from '../../core/scene-transition.service';
+import { VisitorCounterService } from '../../core/visitor-counter.service';
 import { theme } from '../../core/theme';
 import { CAMERA_POSITIONS, DOOR_CAMERA, NEON_SIGN_CAMERA, NEON_SIGN_WAYPOINT } from '../../core/camera-positions';
 import type { Section } from '../../core/portfolio-state.service';
@@ -85,14 +86,20 @@ const PORTFOLIO_SPECIALTY_LINE = 'Frontend Architecture | Scalable Web Applicati
         <div class="mobile-markers-layer">
           @for (marker of mobileGuideMarkers(); track marker.id) {
             @if (marker.visible) {
-              <div
-                class="mobile-marker"
-                [style.left.px]="marker.x"
-                [style.top.px]="marker.y"
-                [style.--delay]="marker.delay"
-              >
+            <div
+              class="mobile-marker"
+              [style.left.px]="marker.x"
+              [style.top.px]="marker.y"
+              [style.--delay]="marker.delay"
+            >
                 <span class="mobile-marker-dot"></span>
-                <span class="mobile-marker-label">{{ marker.label }}</span>
+              <span
+                class="mobile-marker-label"
+                [style.--label-offset-x]="marker.labelOffsetX + 'px'"
+                [style.--label-offset-y]="marker.labelOffsetY + 'px'"
+              >
+                {{ marker.label }}
+              </span>
               </div>
             }
           }
@@ -308,6 +315,7 @@ const PORTFOLIO_SPECIALTY_LINE = 'Frontend Architecture | Scalable Web Applicati
       white-space: nowrap;
       text-overflow: ellipsis;
       overflow: hidden;
+      transform: translate(var(--label-offset-x, 0px), var(--label-offset-y, 0px));
     }
     @keyframes markerPulse {
       0% {
@@ -338,6 +346,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvas') private canvasRef!: ElementRef<HTMLCanvasElement>;
   protected readonly state = inject(PortfolioStateService);
   private readonly transition = inject(SceneTransitionService);
+  private readonly visitorCounter = inject(VisitorCounterService);
   protected readonly portfolioOwnerName = PORTFOLIO_OWNER_NAME;
   protected readonly portfolioRoleLine = PORTFOLIO_ROLE_LINE;
   protected readonly portfolioSpecialtyLine = PORTFOLIO_SPECIALTY_LINE;
@@ -362,6 +371,12 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
   private monitorScreenTexture: THREE.CanvasTexture | null = null;
   private monitorScreenCanvas: HTMLCanvasElement | null = null;
   private monitorScreenCtx: CanvasRenderingContext2D | null = null;
+  private visitorCounterSign: THREE.Group | null = null;
+  private visitorCounterTexture: THREE.CanvasTexture | null = null;
+  private visitorCounterCanvas: HTMLCanvasElement | null = null;
+  private visitorCounterCtx: CanvasRenderingContext2D | null = null;
+  private visitorCounterFaceMaterial: THREE.MeshBasicMaterial | null = null;
+  private visitorCounterGlowMaterial: THREE.MeshBasicMaterial | null = null;
   private monitorUiTime = 0;
   private monitorFrameTick = 0;
 
@@ -409,19 +424,28 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
   private hasShownMobileGuideOnce = false;
 
   private readonly mobileGuideAnchors = [
-    { id: 'about', label: 'Pizarra', section: 'sobre-mi' as const, position: [-1.9, 1.02, -0.62] as [number, number, number], delay: 0 },
-    { id: 'projects', label: 'PC', section: 'proyectos' as const, position: [0.2, 1.02, -0.48] as [number, number, number], delay: 180 },
-    { id: 'hobbies', label: 'Tocadiscos', section: 'hobbies' as const, position: [1.42, 0.96, -1.08] as [number, number, number], delay: 360 },
-    { id: 'certs', label: 'Cuadros', section: 'certificaciones' as const, position: [1.38, 1.28, -1.515] as [number, number, number], delay: 540 },
-    { id: 'contact', label: 'Telefono', section: 'contacto' as const, position: [0.76, 0.79, -0.23] as [number, number, number], delay: 720 },
-    { id: 'switch', label: 'Interruptor', section: 'switch' as const, position: [-1.9, 1.05, -0.42] as [number, number, number], delay: 900 }
+    { id: 'about', label: 'Pizarra', section: 'sobre-mi' as const, position: [-1.72, 1.06, -0.62] as [number, number, number], delay: 0, labelOffsetX: 0, labelOffsetY: 0 },
+    { id: 'projects', label: 'PC', section: 'proyectos' as const, position: [0.2, 1.02, -0.48] as [number, number, number], delay: 180, labelOffsetX: 0, labelOffsetY: 0 },
+    { id: 'hobbies', label: 'Tocadiscos', section: 'hobbies' as const, position: [1.42, 0.96, -1.08] as [number, number, number], delay: 360, labelOffsetX: 0, labelOffsetY: 0 },
+    { id: 'certs', label: 'Cuadros', section: 'certificaciones' as const, position: [1.38, 1.28, -1.515] as [number, number, number], delay: 540, labelOffsetX: 0, labelOffsetY: 0 },
+    { id: 'contact', label: 'Telefono', section: 'contacto' as const, position: [0.76, 0.79, -0.23] as [number, number, number], delay: 720, labelOffsetX: 0, labelOffsetY: 0 },
+    { id: 'switch', label: 'Interruptor', section: 'switch' as const, position: [-1.9, 1.05, -0.42] as [number, number, number], delay: 900, labelOffsetX: -36, labelOffsetY: -14 }
   ];
 
   protected readonly hoverTooltip = signal<{ label: string; x: number; y: number } | null>(null);
   protected readonly isMobileUi = signal(false);
   protected readonly showMobileGuideBanner = signal(false);
   protected readonly showMobileHelpPanel = signal(false);
-  protected readonly mobileGuideMarkers = signal<Array<{ id: string; label: string; x: number; y: number; visible: boolean; delay: string }>>([]);
+  protected readonly mobileGuideMarkers = signal<Array<{
+    id: string;
+    label: string;
+    x: number;
+    y: number;
+    visible: boolean;
+    delay: string;
+    labelOffsetX: number;
+    labelOffsetY: number;
+  }>>([]);
 
   private resizeHandler = () => this.handleResize();
   private canvasPointerUpHandler = (e: PointerEvent) => this.onPointerUp(e);
@@ -454,6 +478,10 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       }
       this.syncCanvasInteractivity(section);
     });
+    effect(() => {
+      const count = this.visitorCounter.count();
+      this.updateVisitorCounterSignTexture(count);
+    });
   }
 
   ngAfterViewInit(): void {
@@ -468,6 +496,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     this.handleResize();
     this.maybeShowMobileGuideBanner();
     window.addEventListener('resize', this.resizeHandler);
+    void this.visitorCounter.ensureInitialized();
   }
 
   ngOnDestroy(): void {
@@ -498,6 +527,13 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     this.monitorScreenCanvas = null;
     this.monitorScreenCtx = null;
     this.monitorScreen = null;
+    this.visitorCounterTexture?.dispose();
+    this.visitorCounterTexture = null;
+    this.visitorCounterCanvas = null;
+    this.visitorCounterCtx = null;
+    this.visitorCounterFaceMaterial = null;
+    this.visitorCounterGlowMaterial = null;
+    this.visitorCounterSign = null;
     this.renderer?.dispose();
   }
 
@@ -795,6 +831,8 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       this.scene.add(switchPlane);
       this.switchMeshes.push(switchPlane);
     }
+
+    this.setupVisitorCounterSign();
   }
 
   private buildProceduralOffice(): void {
@@ -870,7 +908,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
 
     const ledStripBack = new THREE.Mesh(
       new THREE.BoxGeometry(3.5, 0.018, 0.018),
-      new THREE.MeshStandardMaterial({ color: 0xf0ecff, emissive: 0x7c5cff, emissiveIntensity: 0.24 })
+      new THREE.MeshStandardMaterial({ color: 0xddfbff, emissive: 0x40e8ff, emissiveIntensity: 0.3 })
     );
     ledStripBack.position.set(0, 0.09, -1.515);
     ledStripBack.name = 'led_strip_back';
@@ -878,7 +916,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
 
     const ledStripLeft = new THREE.Mesh(
       new THREE.BoxGeometry(0.018, 0.018, 3.0),
-      new THREE.MeshStandardMaterial({ color: 0xf0ecff, emissive: 0x8f72ff, emissiveIntensity: 0.22 })
+      new THREE.MeshStandardMaterial({ color: 0xddfbff, emissive: 0x40e8ff, emissiveIntensity: 0.24 })
     );
     ledStripLeft.position.set(-1.965, 2.08, -0.02);
     ledStripLeft.name = 'led_strip_left';
@@ -886,7 +924,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
 
     const ledStripRight = new THREE.Mesh(
       new THREE.BoxGeometry(0.018, 0.018, 3.0),
-      new THREE.MeshStandardMaterial({ color: 0xf0ecff, emissive: 0x6f56df, emissiveIntensity: 0.22 })
+      new THREE.MeshStandardMaterial({ color: 0xddfbff, emissive: 0x40e8ff, emissiveIntensity: 0.24 })
     );
     ledStripRight.position.set(-1.93, 0.09, -0.02);
     ledStripRight.name = 'led_strip_right';
@@ -918,7 +956,6 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     });
     office.add(this.createMonitorOverlay());
     this.addContactShadow(office, [-0.41, 0.009, -0.35], [0.86, 0.52], 0.17, 'contact_shadow_desk', 0.04);
-    // CPU shadow: slight offset + tilt to match the desk key light projection.
     this.addContactShadow(office, [-0.27, 0.009, -0.62], [0.26, 0.18], 0.2, 'contact_shadow_cpu', -0.52);
     this.addContactShadow(office, [-1.28, 0.009, -0.58], [0.26, 0.21], 0.18, 'contact_shadow_plant', 0.02);
 
@@ -1308,21 +1345,21 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       this.accentLights.push(light);
     };
 
-    makeAccent(0x6dffd0, [-0.34, 1.08, -0.62], 1.5, 0.04, 0.24, 0.55);
-    makeAccent(0x5effc6, [-0.18, 0.34, -0.12], 1.9, 0.0, 0.2, 1.0);
-    makeAccent(0x47ffe0, [-0.34, 0.56, -0.56], 1.6, 0.0, 0.24, 1.05);
-    makeAccent(0x47ffe0, [-0.34, 0.38, -0.56], 1.55, 0.0, 0.17, 0.95);
-    makeAccent(0x4feaff, [0.28, 0.86, -0.62], 1.6, 0.0, 0.17, 1.6);
-    makeAccent(0x43ffd6, [1.34, 0.38, -0.84], 1.4, 0.0, 0.14, 0.5);
-    makeAccent(0x56ffb7, [-1.78, 1.52, 0.12], 1.5, 0.0, 0.18, 2.2);
-    makeAccent(0x44ffca, [-1.72, 1.68, 0.18], 2.35, 0.0, 0.34, 0.2);
+    makeAccent(0x6cf4ff, [-0.34, 1.08, -0.62], 1.5, 0.04, 0.24, 0.55);
+    makeAccent(0x57e9ff, [-0.18, 0.34, -0.12], 1.9, 0.0, 0.2, 1.0);
+    makeAccent(0x4ee7ff, [-0.34, 0.56, -0.56], 1.6, 0.0, 0.24, 1.05);
+    makeAccent(0x4ee7ff, [-0.34, 0.38, -0.56], 1.55, 0.0, 0.17, 0.95);
+    makeAccent(0x45ddff, [0.28, 0.86, -0.62], 1.6, 0.0, 0.17, 1.6);
+    makeAccent(0x4fe2ff, [1.34, 0.38, -0.84], 1.4, 0.0, 0.14, 0.5);
+    makeAccent(0x63f1ff, [-1.78, 1.52, 0.12], 1.5, 0.0, 0.18, 2.2);
+    makeAccent(0x5defff, [-1.72, 1.68, 0.18], 2.35, 0.0, 0.34, 0.2);
     makeAccent(0x43e8ff, [-1.72, 1.68, -0.92], 2.35, 0.0, 0.25, 0.95);
     makeAccent(0x52f9ff, [1.58, 1.68, -1.28], 2.2, 0.0, 0.24, 1.6);
     makeAccent(0x40d7ff, [0.92, 1.68, -1.28], 2.15, 0.0, 0.22, 2.3);
-    makeAccent(0x47ffd7, [-1.9, 0.95, -1.48], 3.2, 0.0, 0.54, 0.2);
-    makeAccent(0x6dfed1, [-1.72, 1.28, -1.46], 2.7, 0.0, 0.34, 1.7);
+    makeAccent(0x4ce6ff, [-1.9, 0.95, -1.48], 3.2, 0.0, 0.54, 0.2);
+    makeAccent(0x67f3ff, [-1.72, 1.28, -1.46], 2.7, 0.0, 0.34, 1.7);
 
-    const lampGlow = new THREE.PointLight(0x42ffe0, 0.72, 3.4);
+    const lampGlow = new THREE.PointLight(0x4eefff, 0.72, 3.4);
     lampGlow.position.set(-1.88, 1.07, -1.44);
     lampGlow.userData['dayIntensity'] = 0;
     lampGlow.userData['nightIntensity'] = 0.9;
@@ -1339,7 +1376,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     office.add(cpuGlow);
     this.accentLights.push(cpuGlow);
 
-    const keyboardGlow = new THREE.PointLight(0x57ffd2, 0.13, 1.2);
+    const keyboardGlow = new THREE.PointLight(0x58ecff, 0.13, 1.2);
     keyboardGlow.position.set(-0.36, 0.96, -0.42);
     keyboardGlow.userData['dayIntensity'] = 0;
     keyboardGlow.userData['nightIntensity'] = 0.18;
@@ -1347,7 +1384,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     office.add(keyboardGlow);
     this.accentLights.push(keyboardGlow);
 
-    const baseGlow = new THREE.PointLight(0x39ffd0, 0.16, 3.2);
+    const baseGlow = new THREE.PointLight(0x46e8ff, 0.16, 3.2);
     baseGlow.position.set(0, 0.14, -1.42);
     baseGlow.userData['dayIntensity'] = 0;
     baseGlow.userData['nightIntensity'] = 0.24;
@@ -1860,9 +1897,9 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       this.hexGlowLights.push(light);
     };
 
-    makeGlow(0xff4f8a, [-0.62, 1.8, -1.35], 1.3, 0.14, 0.1);
-    makeGlow(0x44e6a6, [-0.46, 1.72, -1.34], 1.24, 0.12, 0.85);
-    makeGlow(0x4eb5ff, [-0.28, 1.68, -1.33], 1.3, 0.13, 1.55);
+    makeGlow(0x4cefff, [-0.62, 1.8, -1.35], 1.3, 0.14, 0.1);
+    makeGlow(0x62f6ff, [-0.46, 1.72, -1.34], 1.24, 0.12, 0.85);
+    makeGlow(0x43d9ff, [-0.28, 1.68, -1.33], 1.3, 0.13, 1.55);
   }
 
   private setupDoorHitbox(): void {
@@ -2295,19 +2332,19 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       this.renderer.toneMappingExposure = 1.2;
       this.applyOfficePalette('day');
     } else {
-      this.scene.background = new THREE.Color(0x08130f);
+      this.scene.background = new THREE.Color(theme.sceneBgNight);
       this.scene.fog = null;
-      this.ambientLight.color.setHex(0x17342a);
-      this.ambientLight.intensity = 0.36;
-      this.directionalLight.color.setHex(0x122a22);
-      this.directionalLight.intensity = 0.42;
-      this.fillLight.color.setHex(0x113129);
-      this.fillLight.intensity = 0.24;
-      this.deskKeyLight.color.setHex(0x8ffff4);
-      this.deskKeyLight.intensity = 0.56;
+      this.ambientLight.color.setHex(0x0d3440);
+      this.ambientLight.intensity = 0.5;
+      this.directionalLight.color.setHex(0x0f3f49);
+      this.directionalLight.intensity = 0.58;
+      this.fillLight.color.setHex(0x0b5562);
+      this.fillLight.intensity = 0.34;
+      this.deskKeyLight.color.setHex(0x84ffff);
+      this.deskKeyLight.intensity = 0.86;
       this.deskKeyLight.shadow.normalBias = 0.028;
-      this.warmSideLight.color.setHex(0x39ffd2);
-      this.warmSideLight.intensity = 0.28;
+      this.warmSideLight.color.setHex(0x32ebff);
+      this.warmSideLight.intensity = 0.46;
       this.createRgbLights();
       this.hexGlowLights.forEach((l) => {
         l.visible = true;
@@ -2350,33 +2387,33 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       } else if (name.includes('led_strip_left')) {
         mat.transparent = mode === 'day';
         mat.opacity = mode === 'day' ? 0.14 : 1;
-        mat.color.setHex(mode === 'day' ? 0xf3f0ff : 0xe4fff2);
-        mat.emissive.setHex(mode === 'day' ? 0xe9e2ff : 0x59ffb8);
-        mat.emissiveIntensity = mode === 'day' ? 0.04 : 0.8;
+        mat.color.setHex(mode === 'day' ? 0xf3f0ff : 0xddfbff);
+        mat.emissive.setHex(mode === 'day' ? 0xe9e2ff : 0x40e8ff);
+        mat.emissiveIntensity = mode === 'day' ? 0.04 : 0.95;
       } else if (name.includes('led_strip_right')) {
         mat.transparent = mode === 'day';
         mat.opacity = mode === 'day' ? 0.14 : 1;
         mat.color.setHex(mode === 'day' ? 0xeee9ff : 0xddfbff);
         mat.emissive.setHex(mode === 'day' ? 0xdfd5ff : 0x40e8ff);
-        mat.emissiveIntensity = mode === 'day' ? 0.04 : 0.48;
+        mat.emissiveIntensity = mode === 'day' ? 0.04 : 0.95;
       } else if (name.includes('led_desk_front')) {
         mat.transparent = mode === 'day';
         mat.opacity = mode === 'day' ? 0 : 0.25;
-        mat.color.setHex(mode === 'day' ? 0xf4eeff : 0xede4ff);
-        mat.emissive.setHex(mode === 'day' ? 0xc9b6ff : 0x7c5cff);
-        mat.emissiveIntensity = mode === 'day' ? 0 : 0.32;
+        mat.color.setHex(mode === 'day' ? 0xf4eeff : 0xd6fbff);
+        mat.emissive.setHex(mode === 'day' ? 0xc9b6ff : 0x4cefff);
+        mat.emissiveIntensity = mode === 'day' ? 0 : 0.52;
       } else if (name.includes('led_desk_side')) {
         mat.transparent = mode === 'day';
         mat.opacity = mode === 'day' ? 0 : 0.25;
-        mat.color.setHex(mode === 'day' ? 0xf4eeff : 0xeee6ff);
-        mat.emissive.setHex(mode === 'day' ? 0xd1c1ff : 0x8f72ff);
-        mat.emissiveIntensity = mode === 'day' ? 0 : 0.27;
+        mat.color.setHex(mode === 'day' ? 0xf4eeff : 0xd4f8ff);
+        mat.emissive.setHex(mode === 'day' ? 0xd1c1ff : 0x5befff);
+        mat.emissiveIntensity = mode === 'day' ? 0 : 0.5;
       } else if (name.includes('led_shelf_top')) {
         mat.transparent = mode === 'day';
         mat.opacity = mode === 'day' ? 0 : 0.25;
-        mat.color.setHex(mode === 'day' ? 0xf3ecff : 0xeee6ff);
-        mat.emissive.setHex(mode === 'day' ? 0xc9b6ff : 0x7c5cff);
-        mat.emissiveIntensity = mode === 'day' ? 0 : 0.3;
+        mat.color.setHex(mode === 'day' ? 0xf3ecff : 0xd8faff);
+        mat.emissive.setHex(mode === 'day' ? 0xc9b6ff : 0x3feaff);
+        mat.emissiveIntensity = mode === 'day' ? 0 : 0.5;
       } else if (name.includes('rgb_lamp_tube')) {
         mat.color.setHex(mode === 'day' ? 0xdce3ee : 0xfef3ff);
         mat.emissive.setHex(mode === 'day' ? 0x000000 : 0x58ffe0);
@@ -2393,8 +2430,8 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
         const dayEmissive = (obj.userData['baseEmissiveHex'] as number) ?? 0xc88ce8;
         const idxMatch = name.match(/rgb_hex_face_(\d+)/);
         const idx = idxMatch ? Number.parseInt(idxMatch[1] ?? '0', 10) : 0;
-        const nightFacePalette = [0x6dffba, 0x46ffd6, 0x58f8ff, 0x3ed6ff, 0x6ceeff, 0x5fffd1, 0x85ffd9];
-        const nightFaceEmissive = [0x22ff9f, 0x18f4c7, 0x23e9ff, 0x16bbff, 0x2de0ff, 0x25ffc2, 0x4afccd];
+        const nightFacePalette = [0x79f8ff, 0x63f2ff, 0x58f8ff, 0x3ed6ff, 0x6ceeff, 0x68f5ff, 0x90f9ff];
+        const nightFaceEmissive = [0x42eeff, 0x35e7ff, 0x23e9ff, 0x16bbff, 0x2de0ff, 0x31eeff, 0x54f1ff];
         const baseColor = mode === 'day' ? dayColor : nightFacePalette[idx % nightFacePalette.length]!;
         const baseEmissive = mode === 'day' ? dayEmissive : nightFaceEmissive[idx % nightFaceEmissive.length]!;
         mat.color.setHex(baseColor);
@@ -2405,8 +2442,8 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
         const dayEmissive = (obj.userData['baseEmissiveHex'] as number) ?? 0x6f6a9e;
         const idxMatch = name.match(/rgb_hex_back_(\d+)/);
         const idx = idxMatch ? Number.parseInt(idxMatch[1] ?? '0', 10) : 0;
-        const nightBackPalette = [0x1f4f41, 0x1e5348, 0x1e4a57, 0x204f66, 0x225364, 0x1f5a4f, 0x245a55];
-        const nightBackEmissive = [0x22cfa4, 0x18d5b6, 0x18b7da, 0x1ea4df, 0x22b4e2, 0x18cfa3, 0x24cfb5];
+        const nightBackPalette = [0x183f52, 0x18475a, 0x1a4c63, 0x1e5570, 0x206182, 0x1a4f68, 0x1f5a74];
+        const nightBackEmissive = [0x2ec7ff, 0x2abfff, 0x2aaeea, 0x29a3e6, 0x2db4f0, 0x2ac2ff, 0x31c8ff];
         const baseColor = mode === 'day' ? dayColor : nightBackPalette[idx % nightBackPalette.length]!;
         const baseEmissive = mode === 'day' ? dayEmissive : nightBackEmissive[idx % nightBackEmissive.length]!;
         mat.color.setHex(baseColor);
@@ -2451,9 +2488,9 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
         mat.emissiveIntensity = mode === 'day' ? 0.18 : 0.4;
         mat.roughness = mode === 'day' ? 0.3 : 0.2;
       } else if (name.includes('back_wall')) {
-        mat.color.setHex(mode === 'day' ? 0xd4e0cf : 0x21352b);
+        mat.color.setHex(mode === 'day' ? 0xd4e0cf : 0x1a2f3d);
       } else if (name.includes('wall') || name.includes('column')) {
-        mat.color.setHex(mode === 'day' ? 0xe1eadb : 0x2a4436);
+        mat.color.setHex(mode === 'day' ? 0xe1eadb : 0x213848);
       } else if (name.includes('floor')) {
         mat.color.setHex(mode === 'day' ? 0xcab69a : 0x1d1b28);
       } else if (name.includes('rug')) {
@@ -2545,9 +2582,9 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       [-1.65, 0.65, 0.95]
     ];
     colors.forEach((color, i) => {
-      const light = new THREE.PointLight(color, 0.56, 4.2);
+      const light = new THREE.PointLight(color, 0.74, 4.8);
       light.position.set(positions[i][0] as number, positions[i][1] as number, positions[i][2] as number);
-      light.userData['baseIntensity'] = 0.56;
+      light.userData['baseIntensity'] = 0.74;
       light.userData['phase'] = i * 0.8;
       this.scene!.add(light);
       this.rgbLights.push(light);
@@ -2661,6 +2698,171 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     return windowGroup;
   }
 
+  private setupVisitorCounterSign(): void {
+    if (this.visitorCounterSign || !this.scene) return;
+
+    const signGroup = new THREE.Group();
+    signGroup.name = 'secret_counter_sign';
+    signGroup.position.set(-1.9, 1.5, -0.3);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 320;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      this.visitorCounterCanvas = canvas;
+      this.visitorCounterCtx = ctx;
+      this.visitorCounterTexture = new THREE.CanvasTexture(canvas);
+      this.visitorCounterTexture.colorSpace = THREE.SRGBColorSpace;
+      this.visitorCounterTexture.minFilter = THREE.LinearFilter;
+      this.visitorCounterTexture.magFilter = THREE.LinearFilter;
+    }
+
+    const textMaterial = new THREE.MeshBasicMaterial({
+      map: this.visitorCounterTexture ?? undefined,
+      transparent: true,
+      opacity: 0.98,
+      blending: THREE.AdditiveBlending,
+      depthTest: true,
+      depthWrite: false
+    });
+    this.visitorCounterFaceMaterial = textMaterial;
+    this.visitorCounterGlowMaterial = null;
+
+    const textFace = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.62, 0.17),
+      textMaterial
+    );
+    textFace.name = 'secret_counter_neon_face';
+    textFace.position.z = 0.003;
+    signGroup.add(textFace);
+
+    const frameMaterial = new THREE.MeshStandardMaterial({
+      color: 0x2d2436,
+      roughness: 0.34,
+      metalness: 0.52,
+      emissive: 0x4f3b63,
+      emissiveIntensity: 0.26
+    });
+    const outerWidth = 0.72;
+    const outerHeight = 0.25;
+    const borderThickness = 0.018;
+    const halfW = outerWidth * 0.5;
+    const halfH = outerHeight * 0.5;
+
+    const topBorder = new THREE.Mesh(new THREE.PlaneGeometry(outerWidth, borderThickness), frameMaterial);
+    topBorder.name = 'secret_counter_border_top';
+    topBorder.position.set(0, halfH - borderThickness * 0.5, 0.0015);
+
+    const bottomBorder = new THREE.Mesh(new THREE.PlaneGeometry(outerWidth, borderThickness), frameMaterial);
+    bottomBorder.name = 'secret_counter_border_bottom';
+    bottomBorder.position.set(0, -halfH + borderThickness * 0.5, 0.0015);
+
+    const sideHeight = outerHeight - borderThickness * 2;
+    const leftBorder = new THREE.Mesh(new THREE.PlaneGeometry(borderThickness, sideHeight), frameMaterial);
+    leftBorder.name = 'secret_counter_border_left';
+    leftBorder.position.set(-halfW + borderThickness * 0.5, 0, 0.0015);
+
+    const rightBorder = new THREE.Mesh(new THREE.PlaneGeometry(borderThickness, sideHeight), frameMaterial);
+    rightBorder.name = 'secret_counter_border_right';
+    rightBorder.position.set(halfW - borderThickness * 0.5, 0, 0.0015);
+
+    signGroup.add(topBorder, bottomBorder, leftBorder, rightBorder);
+
+    this.visitorCounterSign = signGroup;
+    this.scene.add(signGroup);
+    this.positionVisitorCounterSignNearBoard();
+    this.updateVisitorCounterSignTexture(this.visitorCounter.count());
+  }
+
+  private positionVisitorCounterSignNearBoard(): void {
+    if (!this.visitorCounterSign || this.aboutMeshes.length === 0) return;
+    const board = this.aboutMeshes[0];
+    if (!board) return;
+
+    const box = new THREE.Box3().setFromObject(board);
+    if (!Number.isFinite(box.min.x) || !Number.isFinite(box.min.y) || !Number.isFinite(box.min.z)) return;
+
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const up = new THREE.Vector3(0, 1, 0);
+
+    const dims = [size.x, size.y, size.z];
+    const minAxis = dims.indexOf(Math.min(...dims));
+    const normal = new THREE.Vector3(
+      minAxis === 0 ? 1 : 0,
+      minAxis === 1 ? 1 : 0,
+      minAxis === 2 ? 1 : 0
+    );
+    if (normal.lengthSq() === 0) {
+      normal.set(1, 0, 0);
+    }
+
+    const toCamera = this.camera.position.clone().sub(center).normalize();
+    if (normal.dot(toCamera) < 0) {
+      normal.multiplyScalar(-1);
+    }
+
+    const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
+    const projectedRight = cameraRight.clone().sub(normal.clone().multiplyScalar(cameraRight.dot(normal)));
+    const boardRight = projectedRight.lengthSq() > 0.0001
+      ? projectedRight.normalize()
+      : new THREE.Vector3().crossVectors(up, normal).normalize();
+
+    const rightOffset = Math.max(size.x, size.z) * 0.52;
+    const yOffset = size.y * 0.76;
+    const frontOffset = 0.015;
+
+    const anchor = center
+      .clone()
+      .add(boardRight.multiplyScalar(rightOffset))
+      .add(normal.clone().multiplyScalar(frontOffset));
+    anchor.y += yOffset;
+
+    this.visitorCounterSign.position.copy(anchor);
+    this.visitorCounterSign.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+  }
+
+  private updateVisitorCounterSignTexture(count: number | null): void {
+    if (!this.visitorCounterCtx || !this.visitorCounterCanvas || !this.visitorCounterTexture) return;
+    const ctx = this.visitorCounterCtx;
+    const { width, height } = this.visitorCounterCanvas;
+
+    ctx.clearRect(0, 0, width, height);
+
+    const label = this.formatVisitorCounterLabel(count);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '700 178px "Arial", "Helvetica", sans-serif';
+
+    ctx.shadowColor = 'rgba(255, 28, 133, 0.92)';
+    ctx.shadowBlur = 44;
+    ctx.fillStyle = '#ff4fa2';
+    ctx.fillText(label, width / 2, height / 2 + 4);
+
+    ctx.shadowColor = 'rgba(255, 140, 196, 0.9)';
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = '#ff8fcb';
+    ctx.fillText(label, width / 2, height / 2 + 4);
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255, 233, 245, 0.95)';
+    ctx.fillText(label, width / 2, height / 2 + 4);
+
+    this.visitorCounterTexture.needsUpdate = true;
+  }
+
+  private formatVisitorCounterLabel(count: number | null): string {
+    const safeCount = typeof count === 'number' && Number.isFinite(count) && count >= 0
+      ? Math.floor(count)
+      : 0;
+    if (safeCount < 1000) {
+      return safeCount.toString().padStart(3, '0');
+    }
+
+    return safeCount.toLocaleString('es-ES').replace(/\./g, ' ');
+  }
+
   private addContactShadow(
     office: THREE.Group,
     position: [number, number, number],
@@ -2737,8 +2939,10 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
   }
 
   private updateNeonPulse(): void {
-    if (this.visualLightMode !== 'night') return;
     this.neonPulseTime += 0.02;
+    this.updateVisitorCounterPulse();
+
+    if (this.visualLightMode !== 'night') return;
 
     this.rgbLights.forEach((light) => {
       const base = (light.userData['baseIntensity'] as number) ?? 1.05;
@@ -2754,11 +2958,11 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
       light.intensity = base * pulse;
       if (light.userData['isBaseRgbGlow']) {
         const t = (Math.sin(this.neonPulseTime * 0.9) + 1) * 0.5;
-        const hue = 0.45 + t * 0.08;
+        const hue = 0.52 + t * 0.06;
         light.color.setHSL(hue, 1, 0.58);
       } else if (light.userData['isLampRgbGlow']) {
         const t = (Math.sin(this.neonPulseTime * 1.4 + phase) + 1) * 0.5;
-        const hue = 0.49 + t * 0.06;
+        const hue = 0.53 + t * 0.05;
         light.color.setHSL(hue, 1, 0.62);
         light.intensity = base * (0.95 + t * 0.5);
       }
@@ -2833,6 +3037,17 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
 
   }
 
+  private updateVisitorCounterPulse(): void {
+    if (!this.visitorCounterFaceMaterial) return;
+    if (this.visualLightMode === 'night') {
+      const faceWave = (Math.sin(this.neonPulseTime * 1.2 + 1.1) + 1) * 0.5;
+      this.visitorCounterFaceMaterial.opacity = 0.92 + faceWave * 0.08;
+      return;
+    }
+
+    this.visitorCounterFaceMaterial.opacity = 0.96;
+  }
+
   private updateMonitorOverlay(force = false): void {
     if (!this.monitorScreenCtx || !this.monitorScreenCanvas || !this.monitorScreenTexture || !this.monitorScreen) return;
     this.monitorFrameTick += 1;
@@ -2896,7 +3111,7 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     this.controls.minDistance = 2;
     this.controls.maxDistance = 8;
     this.controls.enablePan = false;
-    this.controls.enableZoom = false;
+    this.controls.enableZoom = true;
     this.controls.target.set(...this.getResponsiveCameraTarget(CAMERA_POSITIONS.home, 'home').target);
     this.applyResponsiveControlLimits();
   }
@@ -2988,25 +3203,34 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
     const profile = this.getViewportProfile();
 
     if (profile === 'desktop') {
+      this.controls.zoomSpeed = 1;
       this.controls.minPolarAngle = 0.75;
       this.controls.maxPolarAngle = 1.25;
       this.controls.minAzimuthAngle = 0.35;
       this.controls.maxAzimuthAngle = 1.2;
+      this.controls.minDistance = 2;
+      this.controls.maxDistance = 8;
       return;
     }
 
     if (profile === 'mobile') {
+      this.controls.zoomSpeed = 1.3;
       this.controls.minPolarAngle = 0.68;
       this.controls.maxPolarAngle = 1.34;
       this.controls.minAzimuthAngle = 0.06;
       this.controls.maxAzimuthAngle = 1.36;
+      this.controls.minDistance = 1.15;
+      this.controls.maxDistance = 10.2;
       return;
     }
 
+    this.controls.zoomSpeed = 1.45;
     this.controls.minPolarAngle = 0.66;
     this.controls.maxPolarAngle = 1.36;
     this.controls.minAzimuthAngle = 0;
     this.controls.maxAzimuthAngle = 1.38;
+    this.controls.minDistance = 1.05;
+    this.controls.maxDistance = 10.8;
   }
 
   private syncCanvasInteractivity(section: Section): void {
@@ -3059,16 +3283,20 @@ export class Scene3dComponent implements AfterViewInit, OnDestroy {
 
     const markers = this.mobileGuideAnchors.map((anchor) => {
       const v = new THREE.Vector3(...anchor.position).project(this.camera);
-      const x = (v.x * 0.5 + 0.5) * rect.width;
-      const y = (-v.y * 0.5 + 0.5) * rect.height;
-      const visible = v.z > -1 && v.z < 1 && x > 8 && x < rect.width - 8 && y > 8 && y < rect.height - 8;
+      const rawX = (v.x * 0.5 + 0.5) * rect.width;
+      const rawY = (-v.y * 0.5 + 0.5) * rect.height;
+      const x = THREE.MathUtils.clamp(rawX, 18, rect.width - 18);
+      const y = THREE.MathUtils.clamp(rawY, 18, rect.height - 18);
+      const visible = v.z > -1 && v.z < 1;
       return {
         id: anchor.id,
         label: anchor.label,
         x,
         y,
         visible,
-        delay: `${anchor.delay}ms`
+        delay: `${anchor.delay}ms`,
+        labelOffsetX: anchor.labelOffsetX,
+        labelOffsetY: anchor.labelOffsetY
       };
     });
 
