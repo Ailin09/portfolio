@@ -1,9 +1,10 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { EntryComponent } from '../pages/entry/entry.component';
 import { PortfolioComponent } from '../pages/portfolio/portfolio.component';
 import { PortfolioStateService } from '../core/portfolio-state.service';
 import { SceneTransitionService } from '../core/scene-transition.service';
+import { VisitorCounterService } from '../core/visitor-counter.service';
 
 @Component({
   selector: 'app-shell',
@@ -111,7 +112,12 @@ import { SceneTransitionService } from '../core/scene-transition.service';
     }
   `]
 })
-export class ShellComponent {
+export class ShellComponent implements OnInit {
   protected readonly state = inject(PortfolioStateService);
   protected readonly transition = inject(SceneTransitionService);
+  private readonly visitorCounter = inject(VisitorCounterService);
+
+  async ngOnInit(): Promise<void> {
+    await this.visitorCounter.ensureInitialized();
+  }
 }

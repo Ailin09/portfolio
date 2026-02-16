@@ -864,16 +864,16 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
         light.intensity = 0;
       });
     } else {
-      this.scene.background = new THREE.Color(0x08140f);
-      this.scene.fog = new THREE.Fog(0x07110d, 4.3, 12.2);
-      this.baseExposure = 1.05;
+      this.scene.background = new THREE.Color(0x071a24);
+      this.scene.fog = new THREE.Fog(0x0a1d28, 6.2, 15.8);
+      this.baseExposure = 1.26;
 
-      this.ambientLight.color.setHex(0x17352a);
-      this.ambientLight.intensity = 0.42;
-      this.fillLight.color.setHex(0x124030);
-      this.fillLight.intensity = 0.3;
+      this.ambientLight.color.setHex(0x1a3e4f);
+      this.ambientLight.intensity = 0.6;
+      this.fillLight.color.setHex(0x17607a);
+      this.fillLight.intensity = 0.48;
       this.spotLight.color.setHex(0x8ffff4);
-      this.spotLight.intensity = 0.3;
+      this.spotLight.intensity = 0.62;
 
       this.floorMaterial?.color.setHex(0x7b6a57);
       this.wallMaterial?.color.setHex(0x284536);
@@ -903,16 +903,16 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
       if (this.previewAccentMaterial) this.previewAccentMaterial.emissiveIntensity = 1.2;
       this.previewTrimMaterial?.color.setHex(0x2f5b4f);
       this.previewGlowLight.color.setHex(0x4fffe0);
-      this.previewGlowLight.userData['baseIntensity'] = 0.8;
-      this.doorAccentLight.color.setHex(0x58ffd5);
-      this.doorAccentLight.intensity = 0.5;
+      this.previewGlowLight.userData['baseIntensity'] = 1.1;
+      this.doorAccentLight.color.setHex(0x61f0ff);
+      this.doorAccentLight.intensity = 0.9;
       this.rgbLights.forEach((light) => {
         light.visible = true;
         light.intensity = (light.userData['baseIntensity'] as number) ?? 0.3;
       });
       this.ledStripMaterials.forEach((mat) => {
         mat.opacity = 1;
-        mat.emissiveIntensity = 1.9;
+        mat.emissiveIntensity = 2.6;
       });
       this.ledGlowLights.forEach((light) => {
         light.visible = true;
@@ -987,13 +987,13 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
 
       const keyGlow = new THREE.PointLight(color, 0, 4.0);
       keyGlow.position.set(x + towardCenter * 0.24, 1.7, z);
-      keyGlow.userData['baseIntensity'] = 0.95;
+      keyGlow.userData['baseIntensity'] = 1.35;
       keyGlow.userData['phase'] = phase;
       keyGlow.visible = false;
 
       const fillGlow = new THREE.PointLight(color, 0, 3.2);
       fillGlow.position.set(x + towardCenter * 0.14, 1.24, z);
-      fillGlow.userData['baseIntensity'] = 0.58;
+      fillGlow.userData['baseIntensity'] = 0.88;
       fillGlow.userData['phase'] = phase + 0.55;
       fillGlow.visible = false;
 
@@ -1001,14 +1001,14 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
       this.ledGlowLights.push(keyGlow, fillGlow);
     };
 
-    createLamp('left', -0.95, 0xd86dff, 0);
-    createLamp('left', -2.35, 0xc25bff, 0.9);
+    createLamp('left', -0.95, 0x63eaff, 0);
+    createLamp('left', -2.35, 0x4fdfff, 0.9);
     createLamp('right', -0.95, 0x6be4ff, 1.5);
     createLamp('right', -2.35, 0x4ad9ff, 2.2);
 
-    const leftBounce = new THREE.PointLight(0xc96bff, 0, 4.1);
+    const leftBounce = new THREE.PointLight(0x59e6ff, 0, 4.1);
     leftBounce.position.set(-1.25, 1.7, -2.28);
-    leftBounce.userData['baseIntensity'] = 0.42;
+    leftBounce.userData['baseIntensity'] = 0.74;
     leftBounce.userData['phase'] = 1.8;
     leftBounce.visible = false;
     this.scene.add(leftBounce);
@@ -1016,7 +1016,7 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
 
     const rightBounce = new THREE.PointLight(0x66ddff, 0, 4.1);
     rightBounce.position.set(1.25, 1.7, -2.28);
-    rightBounce.userData['baseIntensity'] = 0.4;
+    rightBounce.userData['baseIntensity'] = 0.74;
     rightBounce.userData['phase'] = 2.5;
     rightBounce.visible = false;
     this.scene.add(rightBounce);
@@ -1036,7 +1036,7 @@ export class EntryComponent implements AfterViewInit, OnDestroy {
 
     this.ledStripMaterials.forEach((mat, idx) => {
       const phase = idx * 0.65;
-      const pulse = 1.35 + (Math.sin(this.rgbPulseTime * 1.4 + phase) + 1) * 0.35;
+      const pulse = 1.75 + (Math.sin(this.rgbPulseTime * 1.4 + phase) + 1) * 0.55;
       mat.emissiveIntensity = pulse;
     });
 
