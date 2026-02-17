@@ -3,15 +3,16 @@ import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 
 interface CountApiResponse {
-  value: number;
+  value?: number;
+  count?: number;
 }
 
 @Injectable({ providedIn: 'root' })
 export class VisitorCounterService {
-  private readonly apiBaseUrl = 'https://api.countapi.xyz';
+  private readonly apiBaseUrl = 'https://api.counterapi.dev/v1';
   private readonly namespace = 'ailin-portfolio';
   private readonly key = 'visitas';
-  private readonly localStorageKey = 'portfolio-visitor-counted-v1';
+  private readonly localFallbackKey = 'portfolio-visitor-fallback-count-v1';
   private readonly _count = signal<number | null>(null);
   private initializationPromise: Promise<number | null> | null = null;
 
@@ -38,32 +39,50 @@ export class VisitorCounterService {
   }
 
   private async registerVisit(): Promise<number | null> {
-    const shouldIncrement = this.shouldIncrementVisit();
-    const endpoint = shouldIncrement
-      ? `/hit/${this.namespace}/${this.key}`
-      : `/get/${this.namespace}/${this.key}`;
-
     try {
       const response = await firstValueFrom(
-        this.http.get<CountApiResponse>(`${this.apiBaseUrl}${endpoint}`)
+        this.http.get<CountApiResponse>(`${this.apiBaseUrl}/${this.namespace}/${this.key}/up`)
       );
-
-      if (shouldIncrement && this.canUseLocalStorage()) {
-        localStorage.setItem(this.localStorageKey, '1');
+      const remoteCount = this.extractRemoteCount(response);
+      if (remoteCount !== null) {
+        this.persistFallbackCount(remoteCount);
+        return remoteCount;
       }
-
-      return typeof response.value === 'number' ? response.value : null;
+      return this.nextLocalFallbackCount();
     } catch {
-      return null;
+      return this.nextLocalFallbackCount();
     }
   }
 
-  private shouldIncrementVisit(): boolean {
-    if (!this.canUseLocalStorage()) {
-      return false;
+  private extractRemoteCount(response: CountApiResponse): number | null {
+    const candidate = typeof response.count === 'number'
+      ? response.count
+      : typeof response.value === 'number'
+        ? response.value
+        : null;
+    if (candidate === null || !Number.isFinite(candidate)) {
+      return null;
     }
+    return Math.max(0, Math.floor(candidate));
+  }
 
-    return localStorage.getItem(this.localStorageKey) !== '1';
+  private nextLocalFallbackCount(): number {
+    if (!this.canUseLocalStorage()) {
+      return 0;
+    }
+    const raw = localStorage.getItem(this.localFallbackKey);
+    const current = raw ? Number.parseInt(raw, 10) : 0;
+    const next = Number.isFinite(current) && current >= 0 ? current + 1 : 1;
+    localStorage.setItem(this.localFallbackKey, String(next));
+    return next;
+  }
+
+  private persistFallbackCount(value: number): void {
+    if (!this.canUseLocalStorage()) {
+      return;
+    }
+    const safe = Math.max(0, Math.floor(value));
+    localStorage.setItem(this.localFallbackKey, String(safe));
   }
 
   private canUseLocalStorage(): boolean {
